@@ -88,8 +88,6 @@ export default function Employees() {
     document.body.removeChild(link)
   }
 
-  const isInlineQr = (url?: string) => Boolean(url && url.startsWith('data:image'))
-
   const formatCurrency = useMemo(
     () => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }),
     []
@@ -121,7 +119,7 @@ export default function Employees() {
       key: 'salary',
       header: 'Salary',
       align: 'right',
-      render: (value: number) => formatCurrency.format(value),
+      render: (value: any) => formatCurrency.format(Number(value) || 0),
     },
     { key: 'joinDate', header: 'Join Date' },
     {
@@ -213,7 +211,7 @@ export default function Employees() {
     e.preventDefault()
     setIsAdding(true)
     try {
-      await addEmployee(formData)
+      await addEmployee(formData as any)
       setFormData({ name: '', email: '', phone: '', role: '', salary: '', joinDate: '', profileImageUrl: '', password: '' })
       setShowAddForm(false)
       await loadEmployees()
@@ -373,7 +371,7 @@ export default function Employees() {
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-semibold uppercase text-slate-500">Salary</label>
-                  <input required type="text" value={editFormData.salary || ''} onChange={e => setEditFormData({...editFormData, salary: e.target.value})} className="w-full rounded-xl border border-slate-200 px-4 py-2" />
+                  <input required type="text" value={editFormData.salary || ''} onChange={e => setEditFormData({...editFormData, salary: e.target.value as unknown as number})} className="w-full rounded-xl border border-slate-200 px-4 py-2" />
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-semibold uppercase text-slate-500">Profile Image URL</label>

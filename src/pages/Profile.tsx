@@ -1,5 +1,4 @@
 import Card from '../components/Card'
-import Button from '../components/Button'
 import { useAuth } from '../context/AuthContext'
 
 export default function Profile() {

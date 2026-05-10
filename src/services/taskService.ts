@@ -34,7 +34,7 @@ export const uploadTask = async (payload: {
   })
 }
 
-const mapTaskDoc = (docItem: Awaited<ReturnType<typeof getDocs>>['docs'][number]) => ({
+const mapTaskDoc = (docItem: any) => ({
   id: docItem.id,
   title: docItem.data().title,
   role: docItem.data().role,

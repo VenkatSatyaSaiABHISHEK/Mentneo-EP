@@ -12,10 +12,10 @@ export default function QrScanner({ onScan, onDecode }: QrScannerProps) {
   const [error, setError] = useState('')
   const [isStarting, setIsStarting] = useState(false)
   const [isActive, setIsActive] = useState(false)
-  const [needsUserGesture, setNeedsUserGesture] = useState(false)
+  const [, setNeedsUserGesture] = useState(false)
   const [cameras, setCameras] = useState<Html5QrcodeCamera[]>([])
   const [selectedCameraId, setSelectedCameraId] = useState('')
-  const [hasUserStarted, setHasUserStarted] = useState(false)
+  const [, setHasUserStarted] = useState(false)
   const scannerId = useMemo(() => buildScannerId(), [])
   const isProcessingRef = useRef(false)
   const isStartedRef = useRef(false)
@@ -170,17 +170,15 @@ export default function QrScanner({ onScan, onDecode }: QrScannerProps) {
   }, [selectedCameraId])
 
   useEffect(() => {
-    let isMounted = true
     const html5Qr = new Html5Qrcode(scannerId)
     scannerRef.current = html5Qr
 
     void loadCameras()
 
     return () => {
-      isMounted = false
       void (async () => {
         try {
-          if (html5Qr.isScanning) {
+          if (isStartedRef.current) {
             await html5Qr.stop()
           }
           html5Qr.clear()
@@ -189,7 +187,7 @@ export default function QrScanner({ onScan, onDecode }: QrScannerProps) {
         }
       })()
     }
-  }, [scannerId]) // Only run once on mount!
+  }, [scannerId, loadCameras]) // Only run once on mount!
 
   return (
     <div className="glass-card rounded-2xl p-5">

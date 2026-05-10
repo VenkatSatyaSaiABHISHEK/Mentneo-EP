@@ -1,4 +1,4 @@
-import { AR } from 'js-aruco2'
+
 import {
   collection,
   doc,
