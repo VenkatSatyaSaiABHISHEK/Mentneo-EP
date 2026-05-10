@@ -103,6 +103,8 @@ export default function EmployeeProfile() {
       try {
         const record = await getEmployeeByEmployeeId(employeeId)
         setEmployee(record)
+      } catch (error) {
+        console.error('Error fetching employee profile:', error)
       } finally {
         setIsLoading(false)
       }
