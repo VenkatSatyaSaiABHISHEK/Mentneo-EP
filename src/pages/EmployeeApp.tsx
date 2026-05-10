@@ -18,6 +18,25 @@ export default function EmployeeApp() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [pin, setPin] = useState('')
   const [authError, setAuthError] = useState('')
+  const [failedAttempts, setFailedAttempts] = useState(0)
+  const [lockoutTimeLeft, setLockoutTimeLeft] = useState(0)
+
+  useEffect(() => {
+    let timer: number
+    if (lockoutTimeLeft > 0) {
+      timer = window.setInterval(() => {
+        setLockoutTimeLeft((prev) => {
+          if (prev <= 1) {
+            setFailedAttempts(0)
+            setAuthError('')
+            return 0
+          }
+          return prev - 1
+        })
+      }, 1000)
+    }
+    return () => clearInterval(timer)
+  }, [lockoutTimeLeft])
 
   const todayKey = useMemo(() => getTodayKey(), [])
 
@@ -53,12 +72,22 @@ export default function EmployeeApp() {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!employee) return
+    if (!employee || lockoutTimeLeft > 0) return
     const validPassword = employee.password || '1234'
     if (pin === validPassword) {
       setIsAuthenticated(true)
+      setFailedAttempts(0)
+      setAuthError('')
     } else {
-      setAuthError('Incorrect Password. Please try again.')
+      const newAttempts = failedAttempts + 1
+      setFailedAttempts(newAttempts)
+      if (newAttempts >= 3) {
+        setLockoutTimeLeft(60)
+        setAuthError('Too many failed attempts. Please wait 1 minute.')
+        setPin('')
+      } else {
+        setAuthError(`Incorrect Password. ${3 - newAttempts} attempts left.`)
+      }
     }
   }
 
@@ -106,15 +135,28 @@ export default function EmployeeApp() {
             <div>
               <input
                 type="password"
-                placeholder="Enter Secure Password"
+                placeholder={lockoutTimeLeft > 0 ? `Locked for ${lockoutTimeLeft}s` : "Enter Secure Password"}
                 value={pin}
                 onChange={(e) => setPin(e.target.value)}
-                className="w-full rounded-2xl border-2 border-slate-100 bg-slate-50 px-6 py-4 text-center text-lg tracking-[0.2em] text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none transition-all shadow-inner"
+                disabled={lockoutTimeLeft > 0}
+                className={`w-full rounded-2xl border-2 px-6 py-4 text-center text-lg tracking-[0.2em] transition-all shadow-inner focus:outline-none ${
+                  lockoutTimeLeft > 0 
+                    ? 'border-rose-200 bg-rose-50 text-rose-500 cursor-not-allowed placeholder-rose-400' 
+                    : 'border-slate-100 bg-slate-50 text-slate-900 focus:border-emerald-500 focus:bg-white'
+                }`}
               />
             </div>
             {authError && <p className="text-center text-sm font-semibold text-rose-500 animate-pulse">{authError}</p>}
-            <button type="submit" className="w-full rounded-2xl bg-slate-900 py-4 text-sm font-bold text-white transition hover:bg-slate-800 hover:-translate-y-1 shadow-lg">
-              Unlock Portal
+            <button 
+              type="submit" 
+              disabled={lockoutTimeLeft > 0}
+              className={`w-full rounded-2xl py-4 text-sm font-bold text-white transition shadow-lg ${
+                lockoutTimeLeft > 0 
+                  ? 'bg-slate-400 cursor-not-allowed' 
+                  : 'bg-slate-900 hover:bg-slate-800 hover:-translate-y-1'
+              }`}
+            >
+              {lockoutTimeLeft > 0 ? `Try again in ${lockoutTimeLeft}s` : 'Unlock Portal'}
             </button>
           </form>
         </div>
