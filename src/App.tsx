@@ -10,6 +10,7 @@ import Employees from './pages/Employees'
 import Login from './pages/Login'
 import Profile from './pages/Profile'
 import Tasks from './pages/Tasks'
+import OfferLetterMaker from './pages/OfferLetterMaker'
 
 function App() {
   return (
@@ -39,6 +40,7 @@ function App() {
           <Route path="/attendance" element={<Attendance />} />
           <Route path="/tasks" element={<Tasks />} />
           <Route path="/profile" element={<Profile />} />
+          <Route path="/offer-letters" element={<OfferLetterMaker />} />
         </Route>
         
         <Route path="/employee/:employeeId" element={<EmployeeProfile />} />
