@@ -70,13 +70,24 @@ export default function OfferLetterTemplate({ data, templateRef }: OfferLetterTe
     }
   };
 
+  const formatCurrency = (amount: string) => {
+    if (!amount) return '';
+    const numericString = amount.replace(/[^0-9.]/g, '');
+    if (!numericString) return amount.replace(/^₹\s*/, '');
+    const number = parseFloat(numericString);
+    if (isNaN(number)) return amount.replace(/^₹\s*/, '');
+    return new Intl.NumberFormat('en-IN').format(number);
+  };
+
   return (
     <div ref={templateRef} className="offer-letter-container">
       
       {/* PAGE 1 */}
       <div className="offer-letter-page">
         <div className="page-header">
-          <div className="brand-logo">MENTNEO</div>
+          <div className="brand-logo">
+            <span style={{color: '#6D28D9'}}>M</span><span style={{color: '#6537DE'}}>E</span><span style={{color: '#5C46E3'}}>N</span><span style={{color: '#5455E7'}}>T</span><span style={{color: '#4C64EC'}}>N</span><span style={{color: '#4373F1'}}>E</span><span style={{color: '#3B82F6'}}>O</span>
+          </div>
           <div className="header-right">
             Date: {formatDate(data.date)}
           </div>
@@ -153,20 +164,16 @@ export default function OfferLetterTemplate({ data, templateRef }: OfferLetterTe
           </thead>
           <tbody>
             <tr>
-              <td>Annual Fixed Compensation (CTC)</td>
-              <td>{data.salary}</td>
-            </tr>
-            <tr>
-              <td>Performance Bonus</td>
-              <td>{data.bonusAmount}</td>
+              <td>Monthly Stipend</td>
+              <td>₹ {formatCurrency(data.salary)}</td>
             </tr>
             <tr>
               <td>Payment Frequency</td>
               <td>Monthly</td>
             </tr>
             <tr>
-              <td>Review & Revision</td>
-              <td>Annually (based on performance & company policy)</td>
+              <td>Pre-Placement Offer (PPO)</td>
+              <td>Based on performance during internship</td>
             </tr>
           </tbody>
         </table>
@@ -183,7 +190,9 @@ export default function OfferLetterTemplate({ data, templateRef }: OfferLetterTe
       {/* PAGE 2 */}
       <div className="offer-letter-page">
         <div className="page-header">
-          <div className="brand-logo">MENTNEO</div>
+          <div className="brand-logo">
+            <span style={{color: '#6D28D9'}}>M</span><span style={{color: '#6537DE'}}>E</span><span style={{color: '#5C46E3'}}>N</span><span style={{color: '#5455E7'}}>T</span><span style={{color: '#4C64EC'}}>N</span><span style={{color: '#4373F1'}}>E</span><span style={{color: '#3B82F6'}}>O</span>
+          </div>
           <div className="header-right">
             Offer of Appointment<br/>
             Page <strong>2</strong> of <strong>3</strong>
@@ -246,7 +255,7 @@ export default function OfferLetterTemplate({ data, templateRef }: OfferLetterTe
             <div className="term-icon"><Icons.Plane /></div>
             <div className="term-content">
               <h4>3.7 LEAVE POLICY</h4>
-              <p>You will be entitled to 24 (twenty-four) casual leave days per year, subject to prior approval and company policy. Additional leaves shall be as per company rules.</p>
+              <p>As the company is currently in its startup phase, there will be no fixed monthly leave policy. Employees may take leave only in case of genuine emergencies, subject to management approval.</p>
             </div>
           </div>
 
@@ -292,7 +301,9 @@ export default function OfferLetterTemplate({ data, templateRef }: OfferLetterTe
       {/* PAGE 3 */}
       <div className="offer-letter-page">
         <div className="page-header">
-          <div className="brand-logo">MENTNEO</div>
+          <div className="brand-logo">
+            <span style={{color: '#6D28D9'}}>M</span><span style={{color: '#6537DE'}}>E</span><span style={{color: '#5C46E3'}}>N</span><span style={{color: '#5455E7'}}>T</span><span style={{color: '#4C64EC'}}>N</span><span style={{color: '#4373F1'}}>E</span><span style={{color: '#3B82F6'}}>O</span>
+          </div>
           <div className="header-right">
             Offer of Appointment<br/>
             Page <strong>3</strong> of <strong>3</strong>
@@ -316,14 +327,12 @@ export default function OfferLetterTemplate({ data, templateRef }: OfferLetterTe
         <p className="text-body" style={{ marginBottom: '5px' }}>Warm regards,</p>
         <p className="text-bold" style={{ color: '#5A4AF4', fontSize: '14px', marginBottom: '40px' }}>For Mentneo</p>
 
-        <div className="signature-section">
-          {/* Jyotika's Signature Block (Left side only) */}
-          <div style={{ display: 'inline-block', width: '250px' }}>
-            <div className="signature-img">Jyotika</div>
-            <div className="signature-line"></div>
-            <p className="sig-name">Jyotika</p>
-            <p className="sig-title">HR Manager</p>
-            <p className="sig-company">Mentneo</p>
+        <div className="new-signature-block">
+          <div className="sig-watermark">Digitally Signed</div>
+          <div className="signature-img">Jyothika</div>
+          <div className="sig-details">
+            <strong>N. Sri Venkata Lalitha Jyothika</strong><br/>
+            HR Manager, Mentneo
           </div>
         </div>
 
@@ -357,24 +366,7 @@ export default function OfferLetterTemplate({ data, templateRef }: OfferLetterTe
           </table>
         </div>
 
-        <div className="footer-box">
-          <div className="footer-col">
-            <div className="footer-icon"><Icons.MapPin /></div>
-            <h5>REGISTERED OFFICE</h5>
-            <p>Mentneo Private Limited<br/>Bangalore, Karnataka - 560001<br/>India</p>
-          </div>
-          <div className="footer-col">
-            <div className="footer-icon"><Icons.Mail /></div>
-            <h5>CONTACT US</h5>
-            <p>official@mentneo.com<br/>+91 9182146476</p>
-          </div>
-          <div className="footer-col">
-            <div className="footer-icon"><Icons.Globe /></div>
-            <h5>VISIT US</h5>
-            <p>www.mentneo.com</p>
-          </div>
-          <div className="color-strip"></div>
-        </div>
+
 
       </div>
 

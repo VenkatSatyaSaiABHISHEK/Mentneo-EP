@@ -208,8 +208,7 @@ export default function OfferLetterMaker() {
                 <InputField label="Reporting To" name="reportingTo" value={data.reportingTo} onChange={handleInputChange} />
                 <InputField label="Start Date" name="startDate" type="date" value={data.startDate} onChange={handleInputChange} />
                 <InputField label="Probation Period" name="probationPeriod" value={data.probationPeriod} onChange={handleInputChange} />
-                <InputField label="Salary (CTC)" name="salary" value={data.salary} onChange={handleInputChange} />
-                <InputField label="Bonus Amount" name="bonusAmount" value={data.bonusAmount} onChange={handleInputChange} />
+                <InputField label="Monthly Stipend" name="salary" value={data.salary} onChange={handleInputChange} />
               </div>
             </div>
 
@@ -229,7 +228,7 @@ export default function OfferLetterMaker() {
               <div className="grid grid-cols-1 gap-4">
                 <InputField label="Acceptance Deadline Date" name="acceptanceDeadlineDate" type="date" value={data.acceptanceDeadlineDate} onChange={handleInputChange} />
                 <div className="p-3 bg-blue-50 rounded-lg text-sm text-blue-800 border border-blue-100">
-                  <strong>Note:</strong> Signature Section is permanently set to HR Name: Jyotika, Role: HR Manager.
+                  <strong>Note:</strong> Signature Section is permanently set to HR Name: N. Sri Venkata Lalitha Jyothika, Role: HR Manager.
                 </div>
               </div>
             </div>

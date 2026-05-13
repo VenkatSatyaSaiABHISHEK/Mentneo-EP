@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Caveat:wght@600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Caveat:wght@600&family=Dancing+Script:wght@700&display=swap');
 
 .offer-letter-container {
   font-family: 'Plus Jakarta Sans', sans-serif;
@@ -21,7 +21,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 12px 32px -8px rgba(0, 0, 0, 0.08), 0 4px 12px -4px rgba(0, 0, 0, 0.04);
   flex-shrink: 0;
 }
 
@@ -29,17 +29,18 @@
 .page-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-end;
+  align-items: center;
   border-bottom: 2px solid #5A4AF4;
   padding-bottom: 12px;
   margin-bottom: 25px;
 }
 
 .brand-logo {
+  font-family: 'Plus Jakarta Sans', sans-serif;
   font-weight: 800;
-  font-size: 24px;
-  letter-spacing: 1px;
-  color: #5A4AF4;
+  font-size: 26px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
   display: flex;
   align-items: center;
 }
@@ -102,7 +103,7 @@
 }
 
 .info-table td {
-  padding: 10px 8px;
+  padding: 12px 8px;
   font-size: 12px;
   color: #374151;
 }
@@ -138,7 +139,7 @@
 }
 
 .comp-table td {
-  padding: 10px 12px;
+  padding: 12px 12px;
   font-size: 12px;
   color: #374151;
   border-bottom: 1px solid #F3F4F6;
@@ -309,43 +310,42 @@
 }
 
 /* Signature */
-.signature-section {
-  margin-top: 30px;
-  margin-bottom: 30px;
+.new-signature-block {
+  margin-top: 40px;
+  display: inline-flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.sig-watermark {
+  font-size: 10px;
+  color: #9CA3AF;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: -10px;
 }
 
 .signature-img {
-  font-family: 'Caveat', cursive;
-  font-size: 32px;
-  color: #374151;
-  margin-bottom: 5px;
-  line-height: 1;
+  font-family: 'Dancing Script', cursive;
+  font-size: 42px;
+  color: #059669;
+  line-height: 1.2;
+  transform: rotate(-3deg);
+  margin-bottom: 12px;
+  margin-top: 5px;
 }
 
-.signature-line {
-  width: 220px;
-  border-top: 2px solid #5A4AF4;
-  margin-bottom: 8px;
-}
-
-.sig-name {
+.sig-details {
+  padding-top: 4px;
   font-size: 12px;
-  font-weight: 800;
-  color: #5A4AF4;
-  margin: 0 0 2px 0;
+  color: #374151;
+  line-height: 1.4;
+  min-width: 220px;
 }
 
-.sig-title {
-  font-size: 11px;
-  color: #374151;
-  margin: 0 0 2px 0;
-  font-weight: 600;
-}
-
-.sig-company {
-  font-size: 11px;
-  color: #374151;
-  margin: 0;
+.sig-details strong {
+  color: #111827;
+  font-size: 13px;
 }
 
 /* Acceptance Declaration */
@@ -392,59 +392,7 @@
   height: 15px;
 }
 
-/* Page 3 Footer Box */
-.footer-box {
-  background-color: #F9FAFB;
-  border-radius: 12px;
-  padding: 20px 25px;
-  display: flex;
-  justify-content: space-between;
-  margin-top: auto;
-  position: relative;
-  overflow: hidden;
-}
 
-.footer-col {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: 8px;
-  flex: 1;
-}
-
-.footer-icon {
-  color: #5A4AF4;
-}
-
-.footer-icon svg {
-  width: 16px;
-  height: 16px;
-}
-
-.footer-col h5 {
-  margin: 0;
-  font-size: 10px;
-  font-weight: 800;
-  color: #111827;
-  text-transform: uppercase;
-}
-
-.footer-col p {
-  margin: 0;
-  font-size: 10px;
-  color: #4B5563;
-  line-height: 1.4;
-}
-
-.color-strip {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 8px;
-  background: linear-gradient(to right, #3B82F6 25%, #6366F1 25% 50%, #8B5CF6 50% 75%, #4F46E5 75%);
-}
 
 @media print {
   body {

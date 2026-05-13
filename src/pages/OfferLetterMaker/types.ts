@@ -11,7 +11,6 @@ export interface OfferLetterData {
   startDate: string;
   probationPeriod: string;
   salary: string;
-  bonusAmount: string;
   emailId: string;
   phoneNumber: string;
   website: string;
@@ -23,15 +22,14 @@ export const initialOfferLetterData: OfferLetterData = {
   candidateName: 'Abhishak CH',
   address: 'Bangalore, India',
   date: new Date().toISOString().split('T')[0],
-  position: 'Media Manager',
+  position: 'Intern',
   department: 'Marketing & Communications',
-  employmentType: 'Full-Time',
+  employmentType: 'Internship',
   workLocation: 'Bangalore, India',
   reportingTo: 'Founder',
   startDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Next week
-  probationPeriod: '3 Months',
-  salary: '₹ 8,00,000',
-  bonusAmount: 'Up to ₹ 80,000 (based on performance)',
+  probationPeriod: 'N/A',
+  salary: '10,000',
   emailId: 'abhishak@example.com',
   phoneNumber: '+91 98765 43210',
   website: '',
