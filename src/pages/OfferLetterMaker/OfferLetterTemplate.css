@@ -44,11 +44,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  background: linear-gradient(to right, #7B61FF, #4D96FF);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  text-fill-color: transparent;
+  color: #5A4AF4;
 }
 
 .brand-logo-img {
