@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Caveat:wght@600&family=Dancing+Script:wght@700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Caveat:wght@600&family=Dancing+Script:wght@700&family=Anton&display=swap');
 
 .offer-letter-container {
   font-family: 'Plus Jakarta Sans', sans-serif;
@@ -36,13 +36,26 @@
 }
 
 .brand-logo {
-  font-family: 'Plus Jakarta Sans', sans-serif;
-  font-weight: 800;
-  font-size: 26px;
-  letter-spacing: 2px;
+  font-family: 'Anton', sans-serif;
+  font-weight: 400;
+  font-size: 32px;
+  letter-spacing: 1.5px;
   text-transform: uppercase;
   display: flex;
   align-items: center;
+  gap: 8px;
+  background: linear-gradient(to right, #7B61FF, #4D96FF);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-fill-color: transparent;
+}
+
+.brand-logo-img {
+  width: 80px;
+  height: 80px;
+  object-fit: contain;
+  flex-shrink: 0;
 }
 
 .header-right {
@@ -327,7 +340,7 @@
 
 .signature-img {
   font-family: 'Dancing Script', cursive;
-  font-size: 42px;
+  font-size: 32px;
   color: #059669;
   line-height: 1.2;
   transform: rotate(-3deg);
@@ -411,5 +424,13 @@
     border: none;
     page-break-after: auto;
     page-break-inside: avoid;
+  }
+  /* Fallback for PDF: gradient text may not render; use solid color */
+  .brand-logo {
+    background: none !important;
+    -webkit-background-clip: unset !important;
+    -webkit-text-fill-color: #5A4AF4 !important;
+    background-clip: unset !important;
+    color: #5A4AF4 !important;
   }
 }

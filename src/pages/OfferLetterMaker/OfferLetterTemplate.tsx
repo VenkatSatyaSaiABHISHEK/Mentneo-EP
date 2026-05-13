@@ -86,7 +86,8 @@ export default function OfferLetterTemplate({ data, templateRef }: OfferLetterTe
       <div className="offer-letter-page">
         <div className="page-header">
           <div className="brand-logo">
-            <span style={{color: '#6D28D9'}}>M</span><span style={{color: '#6537DE'}}>E</span><span style={{color: '#5C46E3'}}>N</span><span style={{color: '#5455E7'}}>T</span><span style={{color: '#4C64EC'}}>N</span><span style={{color: '#4373F1'}}>E</span><span style={{color: '#3B82F6'}}>O</span>
+            <img src="https://i.ibb.co/LbQGyJJ/Screenshot-2025-08-05-170614-removebg-preview-20260208-085437-0000-1.png" alt="Mentneo" className="brand-logo-img" />
+            MENTNEO
           </div>
           <div className="header-right">
             Date: {formatDate(data.date)}
@@ -191,7 +192,8 @@ export default function OfferLetterTemplate({ data, templateRef }: OfferLetterTe
       <div className="offer-letter-page">
         <div className="page-header">
           <div className="brand-logo">
-            <span style={{color: '#6D28D9'}}>M</span><span style={{color: '#6537DE'}}>E</span><span style={{color: '#5C46E3'}}>N</span><span style={{color: '#5455E7'}}>T</span><span style={{color: '#4C64EC'}}>N</span><span style={{color: '#4373F1'}}>E</span><span style={{color: '#3B82F6'}}>O</span>
+            <img src="https://i.ibb.co/LbQGyJJ/Screenshot-2025-08-05-170614-removebg-preview-20260208-085437-0000-1.png" alt="Mentneo" className="brand-logo-img" />
+            MENTNEO
           </div>
           <div className="header-right">
             Offer of Appointment<br/>
@@ -302,7 +304,8 @@ export default function OfferLetterTemplate({ data, templateRef }: OfferLetterTe
       <div className="offer-letter-page">
         <div className="page-header">
           <div className="brand-logo">
-            <span style={{color: '#6D28D9'}}>M</span><span style={{color: '#6537DE'}}>E</span><span style={{color: '#5C46E3'}}>N</span><span style={{color: '#5455E7'}}>T</span><span style={{color: '#4C64EC'}}>N</span><span style={{color: '#4373F1'}}>E</span><span style={{color: '#3B82F6'}}>O</span>
+            <img src="https://i.ibb.co/LbQGyJJ/Screenshot-2025-08-05-170614-removebg-preview-20260208-085437-0000-1.png" alt="Mentneo" className="brand-logo-img" />
+            MENTNEO
           </div>
           <div className="header-right">
             Offer of Appointment<br/>
@@ -327,12 +330,19 @@ export default function OfferLetterTemplate({ data, templateRef }: OfferLetterTe
         <p className="text-body" style={{ marginBottom: '5px' }}>Warm regards,</p>
         <p className="text-bold" style={{ color: '#5A4AF4', fontSize: '14px', marginBottom: '40px' }}>For Mentneo</p>
 
-        <div className="new-signature-block">
-          <div className="sig-watermark">Digitally Signed</div>
-          <div className="signature-img">Jyothika</div>
-          <div className="sig-details">
-            <strong>N. Sri Venkata Lalitha Jyothika</strong><br/>
-            HR Manager, Mentneo
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '40px' }}>
+          <div className="new-signature-block">
+            <div className="sig-details">
+              <strong>N. Sri Venkata Lalitha Jyothika</strong><br/>
+              HR Manager, Mentneo
+            </div>
+          </div>
+
+          <div className="new-signature-block">
+            <div className="sig-details">
+              <strong>Abhiram Yeduru</strong><br/>
+              Founder, Mentneo
+            </div>
           </div>
         </div>
 

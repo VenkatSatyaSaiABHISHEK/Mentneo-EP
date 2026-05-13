@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom'
+import Logo from '../components/Logo'
 
 const navItems = [
   { label: 'Dashboard', path: '/' },
@@ -12,9 +13,9 @@ const navItems = [
 export default function Sidebar() {
   return (
     <aside className="sticky top-0 hidden h-screen w-64 flex-col border-r border-slate-200/70 bg-white/70 p-6 backdrop-blur-xl md:flex">
-      <div className="glass-panel rounded-2xl px-4 py-3">
-        <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Mentneo</p>
-        <p className="mt-1 text-lg font-semibold text-slate-900">Employee Portal</p>
+      <div className="glass-panel mb-2 rounded-2xl px-4 py-3">
+        <Logo size="md" />
+        <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500 font-medium">Employee Portal</p>
       </div>
 
       <nav className="mt-8 flex flex-1 flex-col gap-2 text-sm">
