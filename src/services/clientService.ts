@@ -8,8 +8,7 @@ import {
   serverTimestamp,
   updateDoc,
 } from 'firebase/firestore'
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
-import { db, storage } from './firebase'
+import { db } from './firebase'
 import type { Client } from '../types/client'
 
 const CLIENTS_COLLECTION = 'clients'
@@ -53,8 +52,30 @@ export const updateClient = async (clientId: string, payload: Partial<Client>) =
 }
 
 export const uploadClientFile = async (file: File, folder: 'payments' | 'client-data'): Promise<string> => {
-  const safeName = file.name.replace(/\s+/g, '-').toLowerCase()
-  const storageRef = ref(storage, `clients/${folder}/${Date.now()}-${safeName}`)
-  await uploadBytes(storageRef, file)
-  return await getDownloadURL(storageRef)
+  const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
+  const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
+  
+  if (!cloudName || !uploadPreset) {
+    throw new Error('Cloudinary environment variables missing');
+  }
+
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('upload_preset', uploadPreset);
+  formData.append('folder', `mentneo/clients/${folder}`);
+
+  const resourceType = file.type.startsWith('image/') ? 'image' : 'raw';
+  
+  const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/${resourceType}/upload`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(`Cloudinary upload failed: ${errorData.error?.message || 'Unknown error'}`);
+  }
+
+  const data = await response.json();
+  return data.secure_url;
 }
