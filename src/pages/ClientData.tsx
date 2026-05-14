@@ -3,7 +3,7 @@ import Papa from 'papaparse';
 import Button from '../components/Button';
 import Card from '../components/Card';
 import { Client, ClientStatus } from '../types/client';
-import { getAllClients, createClient } from '../services/clientService';
+import { getAllClients, createClient, uploadClientFile } from '../services/clientService';
 
 export default function ClientData() {
   const [clients, setClients] = useState<Client[]>([]);
@@ -97,6 +97,9 @@ export default function ClientData() {
     selectedPackage: '',
     videos: '',
   });
+  const [paymentPhoto, setPaymentPhoto] = useState<File | null>(null);
+  const [clientDataFile, setClientDataFile] = useState<File | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -105,8 +108,24 @@ export default function ClientData() {
 
   const handleAddClient = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
     try {
-      await createClient(newClient as Omit<Client, 'id'>);
+      let paymentPhotoUrl = '';
+      let clientDataUrl = '';
+
+      if (paymentPhoto) {
+        paymentPhotoUrl = await uploadClientFile(paymentPhoto, 'payments');
+      }
+      if (clientDataFile) {
+        clientDataUrl = await uploadClientFile(clientDataFile, 'client-data');
+      }
+
+      await createClient({
+        ...(newClient as Omit<Client, 'id'>),
+        paymentPhotoUrl,
+        clientDataUrl,
+      });
+
       await fetchClients();
       setIsModalOpen(false);
       setNewClient({
@@ -118,8 +137,12 @@ export default function ClientData() {
         selectedPackage: '',
         videos: '',
       });
+      setPaymentPhoto(null);
+      setClientDataFile(null);
     } catch (error) {
       console.error('Error adding client:', error);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -179,13 +202,14 @@ export default function ClientData() {
                 <th className="px-6 py-4 font-semibold">Editor</th>
                 <th className="px-6 py-4 font-semibold">Package</th>
                 <th className="px-6 py-4 font-semibold">Videos</th>
+                <th className="px-6 py-4 font-semibold">Attachments</th>
                 <th className="px-6 py-4 font-semibold text-center">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 bg-white">
               {isLoading ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-slate-500">
+                  <td colSpan={8} className="px-6 py-12 text-center text-slate-500">
                     Loading clients...
                   </td>
                 </tr>
@@ -202,6 +226,19 @@ export default function ClientData() {
                   </td>
                   <td className="px-6 py-4 text-slate-700 font-medium">{client.videos}</td>
                   <td className="px-6 py-4">
+                    <div className="flex flex-col gap-1">
+                      {client.paymentPhotoUrl && (
+                        <a href={client.paymentPhotoUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:text-blue-800 underline">Payment Photo</a>
+                      )}
+                      {client.clientDataUrl && (
+                        <a href={client.clientDataUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:text-blue-800 underline">Client Data</a>
+                      )}
+                      {!client.paymentPhotoUrl && !client.clientDataUrl && (
+                        <span className="text-xs text-slate-400">None</span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
                     <div className="flex justify-center">
                       <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold border ${getStatusColor(client.status)}`}>
                         {client.status}
@@ -212,7 +249,7 @@ export default function ClientData() {
               ))}
               {!isLoading && clients.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-slate-500">
+                  <td colSpan={8} className="px-6 py-12 text-center text-slate-500">
                     No clients found. Click "Add New Client" or "Upload CSV" to get started.
                   </td>
                 </tr>
@@ -317,6 +354,24 @@ export default function ClientData() {
                   </div>
                 </div>
 
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">Payment Photo</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setPaymentPhoto(e.target.files?.[0] || null)}
+                    className="w-full rounded-xl border-slate-200 border px-4 py-2 text-sm file:mr-4 file:py-1.5 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 transition-all outline-none"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">Client Data (Files)</label>
+                  <input
+                    type="file"
+                    onChange={(e) => setClientDataFile(e.target.files?.[0] || null)}
+                    className="w-full rounded-xl border-slate-200 border px-4 py-2 text-sm file:mr-4 file:py-1.5 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 transition-all outline-none"
+                  />
+                </div>
+
                 <div className="space-y-2 md:col-span-2">
                   <label className="text-sm font-medium text-slate-700">Status</label>
                   <select
@@ -336,8 +391,8 @@ export default function ClientData() {
                 <Button variant="outline" type="button" onClick={() => setIsModalOpen(false)}>
                   Cancel
                 </Button>
-                <Button variant="primary" type="submit">
-                  Save Client
+                <Button variant="primary" type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? 'Saving...' : 'Save Client'}
                 </Button>
               </div>
             </form>

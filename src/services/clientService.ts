@@ -8,7 +8,8 @@ import {
   serverTimestamp,
   updateDoc,
 } from 'firebase/firestore'
-import { db } from './firebase'
+import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
+import { db, storage } from './firebase'
 import type { Client } from '../types/client'
 
 const CLIENTS_COLLECTION = 'clients'
@@ -37,6 +38,8 @@ export const getAllClients = async (): Promise<Client[]> => {
       status: data.status || 'Pending',
       selectedPackage: data.selectedPackage || '',
       videos: data.videos || '',
+      paymentPhotoUrl: data.paymentPhotoUrl || '',
+      clientDataUrl: data.clientDataUrl || '',
     } as Client
   })
 }
@@ -47,4 +50,11 @@ export const updateClient = async (clientId: string, payload: Partial<Client>) =
     ...payload,
     updatedAt: serverTimestamp(),
   })
+}
+
+export const uploadClientFile = async (file: File, folder: 'payments' | 'client-data'): Promise<string> => {
+  const safeName = file.name.replace(/\s+/g, '-').toLowerCase()
+  const storageRef = ref(storage, `clients/${folder}/${Date.now()}-${safeName}`)
+  await uploadBytes(storageRef, file)
+  return await getDownloadURL(storageRef)
 }

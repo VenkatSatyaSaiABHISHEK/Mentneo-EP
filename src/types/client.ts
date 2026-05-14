@@ -9,4 +9,6 @@ export interface Client {
   status: ClientStatus;
   selectedPackage: string;
   videos: string | number;
+  paymentPhotoUrl?: string;
+  clientDataUrl?: string;
 }
