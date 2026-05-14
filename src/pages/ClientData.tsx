@@ -1,13 +1,31 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Papa from 'papaparse';
 import Button from '../components/Button';
 import Card from '../components/Card';
 import { Client, ClientStatus } from '../types/client';
+import { getAllClients, createClient } from '../services/clientService';
 
 export default function ClientData() {
   const [clients, setClients] = useState<Client[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    fetchClients();
+  }, []);
+
+  const fetchClients = async () => {
+    try {
+      setIsLoading(true);
+      const data = await getAllClients();
+      setClients(data);
+    } catch (error) {
+      console.error('Error fetching clients:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleCsvUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -18,10 +36,10 @@ export default function ClientData() {
       header: true,
       skipEmptyLines: true,
       transformHeader: (header) => header.trim().toLowerCase(),
-      complete: (results) => {
+      complete: async (results) => {
         const parsedData = results.data as Record<string, string>[];
         
-        const newClients: Client[] = parsedData.map(row => {
+        const newClientsData: Omit<Client, 'id'>[] = parsedData.map(row => {
           // Normalizing common status values
           let statusStr = row['status']?.trim() || 'Pending';
           if (statusStr.toLowerCase() === 'in progress') statusStr = 'In Progress';
@@ -29,7 +47,6 @@ export default function ClientData() {
           if (statusStr.toLowerCase() === 'pending') statusStr = 'Pending';
           
           return {
-            id: Math.random().toString(36).substr(2, 9),
             clientName: row['client name'] || row['clientname'] || row['name'] || '',
             phoneNumber: row['phone number'] || row['phone'] || '',
             telecallerName: row['telecaller'] || row['telecaller name'] || '',
@@ -40,11 +57,15 @@ export default function ClientData() {
           };
         });
 
-        // Add new clients to the existing list
-        setClients(prev => [...prev, ...newClients]);
-        setIsUploading(false);
-        // Reset file input
-        e.target.value = '';
+        try {
+          await Promise.all(newClientsData.map(clientData => createClient(clientData)));
+          await fetchClients();
+        } catch (error) {
+          console.error('Error uploading clients:', error);
+        } finally {
+          setIsUploading(false);
+          e.target.value = '';
+        }
       },
       error: (error) => {
         console.error('Error parsing CSV:', error);
@@ -82,20 +103,24 @@ export default function ClientData() {
     setNewClient({ ...newClient, [name]: value });
   };
 
-  const handleAddClient = (e: React.FormEvent) => {
+  const handleAddClient = async (e: React.FormEvent) => {
     e.preventDefault();
-    const newId = Math.random().toString(36).substr(2, 9);
-    setClients([...clients, { ...newClient, id: newId } as Client]);
-    setIsModalOpen(false);
-    setNewClient({
-      clientName: '',
-      phoneNumber: '',
-      telecallerName: '',
-      editorName: '',
-      status: 'Pending',
-      selectedPackage: '',
-      videos: '',
-    });
+    try {
+      await createClient(newClient as Omit<Client, 'id'>);
+      await fetchClients();
+      setIsModalOpen(false);
+      setNewClient({
+        clientName: '',
+        phoneNumber: '',
+        telecallerName: '',
+        editorName: '',
+        status: 'Pending',
+        selectedPackage: '',
+        videos: '',
+      });
+    } catch (error) {
+      console.error('Error adding client:', error);
+    }
   };
 
   const getStatusColor = (status: ClientStatus) => {
@@ -158,7 +183,13 @@ export default function ClientData() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 bg-white">
-              {clients.map((client) => (
+              {isLoading ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-12 text-center text-slate-500">
+                    Loading clients...
+                  </td>
+                </tr>
+              ) : clients.map((client) => (
                 <tr key={client.id} className="hover:bg-slate-50/50 transition-colors">
                   <td className="px-6 py-4 font-medium text-slate-900">{client.clientName}</td>
                   <td className="px-6 py-4">{client.phoneNumber}</td>
@@ -179,7 +210,7 @@ export default function ClientData() {
                   </td>
                 </tr>
               ))}
-              {clients.length === 0 && (
+              {!isLoading && clients.length === 0 && (
                 <tr>
                   <td colSpan={7} className="px-6 py-12 text-center text-slate-500">
                     No clients found. Click "Add New Client" or "Upload CSV" to get started.
