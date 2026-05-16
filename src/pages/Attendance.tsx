@@ -64,6 +64,33 @@ export default function Attendance() {
     document.body.removeChild(link)
   }
 
+  const handleDownloadMonthlyCSV = async () => {
+    setIsLoading(true)
+    try {
+      let csvContent = "Date,Employee Name,Employee ID,Check-in Time\n"
+      // Loop over each day in the selected month
+      for (const day of daysInMonth) {
+        const dayKey = format(day, 'yyyy-MM-dd')
+        const records = await getAttendanceForDate(dayKey)
+        records.forEach(r => {
+          csvContent += `${dayKey},"${r.name}",${r.empId},${r.time}\n`
+        })
+      }
+      
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+      const link = document.createElement('a')
+      link.href = URL.createObjectURL(blob)
+      link.download = `Attendance_${format(currentMonth, 'MMMM_yyyy')}.csv`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   return (
     <div className="space-y-6 pb-24 max-w-6xl mx-auto">
       {/* Top Header & Kiosk Launcher */}
@@ -72,12 +99,21 @@ export default function Attendance() {
           <h1 className="text-3xl font-bold text-slate-900">Attendance Dashboard</h1>
           <p className="text-slate-500 mt-1">Manage logs, view calendar, and monitor daily check-ins.</p>
         </div>
-        <Button 
-          onClick={() => navigate('/kiosk')}
-          className="bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 px-6 py-2.5 rounded-full font-bold whitespace-nowrap"
-        >
-          Launch Fullscreen Kiosk
-        </Button>
+        <div className="flex gap-3">
+          <Button 
+            onClick={handleDownloadMonthlyCSV}
+            variant="outline"
+            className="border-slate-300 text-slate-700 bg-white hover:bg-slate-50 shadow-sm"
+          >
+            Export Monthly CSV
+          </Button>
+          <Button 
+            onClick={() => navigate('/kiosk')}
+            className="bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 px-6 py-2.5 rounded-full font-bold whitespace-nowrap"
+          >
+            Launch Fullscreen Kiosk
+          </Button>
+        </div>
       </div>
 
       {/* Analytics Summary */}
@@ -149,9 +185,6 @@ export default function Attendance() {
         <Card className="animate-rise">
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-lg font-bold text-slate-900">Attendance Log <span className="text-slate-400 font-normal ml-2">({dateKey})</span></h3>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" className="text-xs">Download Report</Button>
-            </div>
           </div>
           
           <div className="space-y-3">

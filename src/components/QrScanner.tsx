@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Html5Qrcode, type Html5QrcodeCamera } from 'html5-qrcode'
+import { Html5Qrcode, Html5QrcodeSupportedFormats, type Html5QrcodeCamera } from 'html5-qrcode'
 
 const buildScannerId = () => `qr-reader-${Math.random().toString(36).slice(2)}`
 
@@ -69,6 +69,11 @@ export default function QrScanner({ onScan, onDecode }: QrScannerProps) {
     }
     isStoppingRef.current = true
     try {
+      const videoElement = document.querySelector(`#${scannerId} video`) as HTMLVideoElement;
+      if (videoElement && videoElement.srcObject) {
+        const stream = videoElement.srcObject as MediaStream;
+        stream.getTracks().forEach(track => track.stop());
+      }
       await scannerRef.current.stop()
     } catch {
       // Ignore stop errors.
@@ -76,7 +81,7 @@ export default function QrScanner({ onScan, onDecode }: QrScannerProps) {
     isStartedRef.current = false
     setIsActive(false)
     isStoppingRef.current = false
-  }, [])
+  }, [scannerId])
 
 
   const startScanner = useCallback(async (cameraIdOverride?: string) => {
@@ -89,6 +94,7 @@ export default function QrScanner({ onScan, onDecode }: QrScannerProps) {
     try {
       setNeedsUserGesture(false)
       const onDecoded = async (decodedText: string) => {
+        console.log('SCANNER DETECTED:', decodedText)
         onDecode?.(decodedText)
         if (isProcessingRef.current) {
           return
@@ -106,9 +112,12 @@ export default function QrScanner({ onScan, onDecode }: QrScannerProps) {
       }
 
       const config = {
-        fps: 12,
-        qrbox: { width: 280, height: 280 },
-        aspectRatio: 1,
+        fps: 30,
+        disableFlip: false,
+        formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+        experimentalFeatures: {
+          useBarCodeDetectorIfSupported: true
+        }
       }
 
       const cameraId = cameraIdOverride ?? selectedCameraId
@@ -178,6 +187,11 @@ export default function QrScanner({ onScan, onDecode }: QrScannerProps) {
     return () => {
       void (async () => {
         try {
+          const videoElement = document.querySelector(`#${scannerId} video`) as HTMLVideoElement;
+          if (videoElement && videoElement.srcObject) {
+            const stream = videoElement.srcObject as MediaStream;
+            stream.getTracks().forEach(track => track.stop());
+          }
           if (isStartedRef.current) {
             await html5Qr.stop()
           }
@@ -187,7 +201,8 @@ export default function QrScanner({ onScan, onDecode }: QrScannerProps) {
         }
       })()
     }
-  }, [scannerId, loadCameras]) // Only run once on mount!
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scannerId]) // Only run once on mount!
 
   return (
     <div className="glass-card rounded-2xl p-5">
@@ -196,6 +211,14 @@ export default function QrScanner({ onScan, onDecode }: QrScannerProps) {
       <p className="mt-2 text-sm text-muted">
         Point the camera at the employee QR code to mark attendance.
       </p>
+      <style>{`
+        #${scannerId} video {
+          object-fit: cover !important;
+          width: 100% !important;
+          height: 100% !important;
+          border-radius: 1rem;
+        }
+      `}</style>
       <div
         className={`qr-scanner relative mt-4 h-[260px] overflow-hidden rounded-2xl border border-slate-200 bg-slate-900/90 ${
           !isActive ? 'cursor-pointer' : ''
@@ -209,7 +232,7 @@ export default function QrScanner({ onScan, onDecode }: QrScannerProps) {
           })()
         }}
       >
-        <div id={scannerId} className="qr-scanner-target" />
+        <div id={scannerId} className="qr-scanner-target h-full w-full" />
         {!isActive && (
           <div className="absolute inset-0 flex items-center justify-center bg-slate-900/30 text-sm font-semibold text-white">
             Click to enable camera

@@ -28,7 +28,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         try {
           // Check if the user exists in the 'admins' collection
           const adminDoc = await getDoc(doc(db, 'admins', nextUser.uid))
-          setIsAdmin(adminDoc.exists())
+          if (adminDoc.exists()) {
+            setIsAdmin(true)
+          } else if (nextUser.email === 'abhi31mahi@gmail.com') {
+            // Automatically make the owner an admin
+            try {
+              const { setDoc } = await import('firebase/firestore')
+              await setDoc(doc(db, 'admins', nextUser.uid), {
+                email: nextUser.email,
+                role: 'superadmin',
+                createdAt: new Date().toISOString()
+              })
+              setIsAdmin(true)
+            } catch (e) {
+              console.error("Failed to auto-create admin doc", e)
+              setIsAdmin(true) // Still let them in for this session
+            }
+          } else {
+            setIsAdmin(false)
+          }
         } catch (error) {
           console.error("Error checking admin status:", error)
           setIsAdmin(false)

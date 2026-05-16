@@ -23,10 +23,28 @@ export default function Employees() {
   const [isAdding, setIsAdding] = useState(false)
   const [formData, setFormData] = useState({ name: '', email: '', phone: '', role: '', salary: '', joinDate: '', profileImageUrl: '', password: '' })
 
-  const [customizingEmployee, setCustomizingEmployee] = useState<EmployeeRecord | null>(null)
-  const [customMarkerColor, setCustomMarkerColor] = useState('#000000')
-  const [customBgColor, setCustomBgColor] = useState('transparent')
-  const [qrPreviewUrl, setQrPreviewUrl] = useState('')
+  // Direct QR Download function
+  const handleDownloadQr = async (emp: EmployeeRecord) => {
+    try {
+      const url = await QRCode.toDataURL(emp.employeeId, {
+        margin: 2,
+        width: 1024,
+        color: {
+          dark: '#000000',
+          light: '#ffffff'
+        }
+      })
+      const link = document.createElement('a')
+      link.download = `${emp.employeeId}-qr.png`
+      link.href = url
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+    } catch (err) {
+      console.error('Failed to generate QR code', err)
+      alert('Failed to generate QR code')
+    }
+  }
 
   // Attendance Viewer State
   const [viewingAttendanceEmployee, setViewingAttendanceEmployee] = useState<EmployeeRecord | null>(null)
@@ -64,29 +82,7 @@ export default function Employees() {
   const [isAdminUnlocked, setIsAdminUnlocked] = useState(false)
   const [adminPasswordInput, setAdminPasswordInput] = useState('')
 
-  useEffect(() => {
-    if (customizingEmployee) {
-      const url = `${window.location.origin}/employee/${customizingEmployee.employeeId}`
-      QRCode.toDataURL(url, {
-        margin: 1,
-        width: 1024,
-        color: {
-          dark: customMarkerColor,
-          light: customBgColor === 'transparent' ? '#0000' : customBgColor
-        }
-      }).then(url => setQrPreviewUrl(url))
-    }
-  }, [customizingEmployee, customMarkerColor, customBgColor])
 
-  const handleDownloadPng = () => {
-    if (!customizingEmployee || !qrPreviewUrl) return
-    const link = document.createElement('a')
-    link.download = `${customizingEmployee.employeeId}-custom-qr.png`
-    link.href = qrPreviewUrl
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-  }
 
   const formatCurrency = useMemo(
     () => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }),
@@ -147,10 +143,10 @@ export default function Employees() {
               View More
             </button>
             <button
-              onClick={() => setCustomizingEmployee(row)}
+              onClick={() => handleDownloadQr(row)}
               className="rounded-full bg-slate-900 px-3 py-1 text-xs text-white transition hover:bg-slate-800"
             >
-              Customize QR
+              Download QR
             </button>
           </div>
           <div className="flex items-center gap-2 text-xs">
@@ -478,66 +474,7 @@ export default function Employees() {
         )}
       </Card>
 
-      {/* QR Customize Modal */}
-      {customizingEmployee && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm">
-          <Card className="w-full max-w-sm animate-rise">
-            <h3 className="mb-4 text-lg font-semibold text-slate-900">
-              Customize Tag for {customizingEmployee.employeeId}
-            </h3>
-            
-            <div className="mb-6 flex justify-center">
-              <div 
-                className="flex h-32 w-32 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 p-4 shadow-sm" 
-                style={{ backgroundColor: customBgColor === 'transparent' ? '#f8fafc' : customBgColor }}
-              >
-                {qrPreviewUrl && <img src={qrPreviewUrl} alt="Custom QR" className="h-full w-full object-contain" />}
-              </div>
-            </div>
 
-            <div className="space-y-4">
-              <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">Marker Color</label>
-                <input 
-                  type="color" 
-                  value={customMarkerColor} 
-                  onChange={(e) => setCustomMarkerColor(e.target.value)}
-                  className="block h-10 w-full cursor-pointer rounded-lg border-slate-200"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">Background Color</label>
-                <select
-                  value={customBgColor}
-                  onChange={(e) => setCustomBgColor(e.target.value)}
-                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                >
-                  <option value="transparent">Transparent (None)</option>
-                  <option value="#ffffff">White</option>
-                  <option value="#0f172a">Slate 900</option>
-                  <option value="#f8fafc">Slate 50</option>
-                </select>
-              </div>
-
-              <div className="mt-6 flex justify-end gap-3 pt-4">
-                <button 
-                  onClick={() => setCustomizingEmployee(null)}
-                  className="rounded-full px-4 py-2 text-sm text-slate-600 transition hover:bg-slate-100"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleDownloadPng}
-                  className="rounded-full bg-slate-900 px-6 py-2 text-sm text-white transition hover:bg-slate-800"
-                >
-                  Download QR
-                </button>
-              </div>
-            </div>
-          </Card>
-        </div>
-      )}
 
       {/* Attendance Details Modal */}
       {viewingAttendanceEmployee && (

@@ -8,6 +8,7 @@ const navItems = [
   { label: 'Tasks', path: '/tasks' },
   { label: 'Client Data', path: '/client-data' },
   { label: 'Offer Letters', path: '/offer-letters' },
+  { label: 'Analytics', path: '/analytics' },
   { label: 'Profile', path: '/profile' },
 ]
 

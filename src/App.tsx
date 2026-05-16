@@ -12,6 +12,7 @@ import Profile from './pages/Profile'
 import Tasks from './pages/Tasks'
 import OfferLetterMaker from './pages/OfferLetterMaker'
 import ClientData from './pages/ClientData'
+import Analytics from './pages/Analytics'
 
 function App() {
   return (
@@ -43,6 +44,7 @@ function App() {
           <Route path="/profile" element={<Profile />} />
           <Route path="/offer-letters" element={<OfferLetterMaker />} />
           <Route path="/client-data" element={<ClientData />} />
+          <Route path="/analytics" element={<Analytics />} />
         </Route>
         
         <Route path="/employee/:employeeId" element={<EmployeeProfile />} />
