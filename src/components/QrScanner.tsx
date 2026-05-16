@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Html5Qrcode, Html5QrcodeSupportedFormats, type Html5QrcodeCamera } from 'html5-qrcode'
+import { Html5Qrcode, type Html5QrcodeCamera } from 'html5-qrcode'
 
 const buildScannerId = () => `qr-reader-${Math.random().toString(36).slice(2)}`
 
@@ -114,7 +114,6 @@ export default function QrScanner({ onScan, onDecode }: QrScannerProps) {
       const config = {
         fps: 30,
         disableFlip: false,
-        formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
         experimentalFeatures: {
           useBarCodeDetectorIfSupported: true
         }

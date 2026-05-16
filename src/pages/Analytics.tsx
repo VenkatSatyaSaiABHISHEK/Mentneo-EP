@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { getFinancialData, saveFinancialData, deleteFinancialData, type FinancialData } from '../services/financialService'
-import { ResponsiveContainer, ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, Area, PieChart, Pie, Cell } from 'recharts'
+import { ResponsiveContainer, ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, Area, PieChart, Pie, Cell } from 'recharts'
 import Papa from 'papaparse'
 // @ts-ignore
 import html2pdf from 'html2pdf.js'
@@ -248,7 +248,9 @@ export default function Analytics() {
 
   const exportToPDF = () => {
     const element = document.getElementById('analytics-report')
-    const opt = {
+    if (!element) return;
+    
+    const opt: any = {
       margin:       0.5,
       filename:     `HR_Financial_Report_${new Date().toISOString().split('T')[0]}.pdf`,
       image:        { type: 'jpeg', quality: 0.98 },
@@ -533,7 +535,7 @@ export default function Analytics() {
                       <RechartsTooltip 
                         contentStyle={{ borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)' }}
                         itemStyle={{ fontWeight: 600 }}
-                        formatter={(value: number) => [`₹${value.toLocaleString('en-IN')}`, undefined]}
+                        formatter={(value: any) => [`₹${Number(value).toLocaleString('en-IN')}`, undefined]}
                       />
                       <Legend iconType="circle" wrapperStyle={{ fontSize: '11px', paddingTop: '10px', fontWeight: 500 }} />
                       <Bar dataKey="Revenue" barSize={10} fill="#3b82f6" radius={[4, 4, 0, 0]} />
@@ -581,7 +583,7 @@ export default function Analytics() {
                       <RechartsTooltip 
                         contentStyle={{ borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)' }}
                         itemStyle={{ fontWeight: 600 }}
-                        formatter={(value: number) => [`₹${value.toLocaleString('en-IN')}`, undefined]}
+                        formatter={(value: any) => [`₹${Number(value).toLocaleString('en-IN')}`, undefined]}
                       />
                       <Legend 
                         layout="vertical" 
