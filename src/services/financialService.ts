@@ -1,4 +1,4 @@
-import { collection, doc, getDocs, setDoc, deleteDoc, query, orderBy } from 'firebase/firestore'
+import { collection, doc, getDocs, setDoc, deleteDoc, query } from 'firebase/firestore'
 import { db } from './firebase'
 
 export interface FinancialData {
