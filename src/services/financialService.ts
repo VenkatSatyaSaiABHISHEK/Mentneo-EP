@@ -3,8 +3,7 @@ import { db } from './firebase'
 
 export interface FinancialData {
   id: string;
-  month: string;
-  year: number;
+  date: string; // YYYY-MM-DD format
   revenue: number;
   payout: number; // Total payout across all deps
   deductions: number;
@@ -24,9 +23,15 @@ const COLLECTION_NAME = 'financials'
 
 export async function getFinancialData(): Promise<FinancialData[]> {
   try {
-    const q = query(collection(db, COLLECTION_NAME), orderBy('year', 'asc'), orderBy('createdAt', 'asc'))
+    const q = query(collection(db, COLLECTION_NAME))
     const snapshot = await getDocs(q)
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FinancialData))
+    const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FinancialData))
+    
+    return docs.sort((a, b) => {
+      const dateA = a.date || ''
+      const dateB = b.date || ''
+      return dateA.localeCompare(dateB) || (a.createdAt || 0) - (b.createdAt || 0)
+    })
   } catch (error) {
     console.error('Error fetching financial data:', error)
     return []

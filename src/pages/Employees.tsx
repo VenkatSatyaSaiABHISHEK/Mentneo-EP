@@ -13,7 +13,7 @@ import { auth } from '../services/firebase'
 import { useAuth } from '../context/AuthContext'
 
 export default function Employees() {
-  const { user } = useAuth()
+  const { user, isSuperAdmin } = useAuth()
   const [employees, setEmployees] = useState<EmployeeRecord[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -125,17 +125,19 @@ export default function Employees() {
       render: (_, row) => (
         <div className="flex flex-col gap-2 py-1 items-center">
           <div className="flex flex-wrap items-center justify-center gap-2">
-            <button
-              onClick={() => {
-                setEditingEmployee(row)
-                setEditFormData(row)
-                setIsAdminUnlocked(false)
-                setAdminPasswordInput('')
-              }}
-              className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-200"
-            >
-              Edit Details
-            </button>
+            {!isSuperAdmin && (
+              <button
+                onClick={() => {
+                  setEditingEmployee(row)
+                  setEditFormData(row)
+                  setIsAdminUnlocked(false)
+                  setAdminPasswordInput('')
+                }}
+                className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-200"
+              >
+                Edit Details
+              </button>
+            )}
             <button
               onClick={() => handleViewAttendance(row)}
               className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-200"
@@ -301,14 +303,17 @@ export default function Employees() {
               Track your workforce across departments and locations with a live roster.
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <Button variant="outline" onClick={() => setShowResetModal(true)} disabled={isResetting} className="text-rose-600 border-rose-200 hover:bg-rose-50">
-              {isResetting ? 'Resetting...' : 'Security Reset (Passwords)'}
-            </Button>
-            <Button onClick={() => setShowAddForm(!showAddForm)}>
-              {showAddForm ? 'Cancel' : '+ Add Employee'}
-            </Button>
-          </div>
+          
+          {!isSuperAdmin && (
+            <div className="flex flex-wrap items-center gap-3">
+              <Button variant="outline" onClick={() => setShowResetModal(true)} disabled={isResetting} className="text-rose-600 border-rose-200 hover:bg-rose-50">
+                {isResetting ? 'Resetting...' : 'Security Reset (Passwords)'}
+              </Button>
+              <Button onClick={() => setShowAddForm(!showAddForm)}>
+                {showAddForm ? 'Cancel' : '+ Add Employee'}
+              </Button>
+            </div>
+          )}
         </div>
       </Card>
 
@@ -437,7 +442,9 @@ export default function Employees() {
         </div>
       )}
 
-      <CsvUpload onUploaded={loadEmployees} />
+      {!isSuperAdmin && (
+        <CsvUpload onUploaded={loadEmployees} />
+      )}
       <Card className="animate-rise">
         <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>

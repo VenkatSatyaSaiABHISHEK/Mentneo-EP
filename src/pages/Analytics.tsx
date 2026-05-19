@@ -4,6 +4,7 @@ import { ResponsiveContainer, ComposedChart, Bar, XAxis, YAxis, CartesianGrid, T
 import Papa from 'papaparse'
 // @ts-ignore
 import html2pdf from 'html2pdf.js'
+import { useAuth } from '../context/AuthContext'
 
 // Simple elegant SVG Icons
 const Icons = {
@@ -17,13 +18,14 @@ const Icons = {
 }
 
 export default function Analytics() {
+  const { isSuperAdmin } = useAuth()
   const [data, setData] = useState<FinancialData[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [showGuide, setShowGuide] = useState(false)
+  const [showVisualsModal, setShowVisualsModal] = useState(false)
 
   const [formData, setFormData] = useState({
-    month: 'January',
-    year: new Date().getFullYear(),
+    date: new Date().toISOString().split('T')[0],
     revenue: 0,
     deductions: 0,
     otherExpenses: 0,
@@ -42,14 +44,12 @@ export default function Analytics() {
       const fetchedData = await getFinancialData()
       setData(fetchedData)
       
-      // Auto-load current month data if it exists
-      const currentMonth = 'January'
-      const currentYear = new Date().getFullYear()
-      const existingRecord = fetchedData.find(d => d.month === currentMonth && d.year === currentYear)
+      // Auto-load today's data if it exists
+      const today = new Date().toISOString().split('T')[0]
+      const existingRecord = fetchedData.find(d => d.date === today)
       if (existingRecord) {
         setFormData({
-          month: existingRecord.month,
-          year: existingRecord.year,
+          date: existingRecord.date,
           revenue: existingRecord.revenue,
           deductions: existingRecord.deductions,
           otherExpenses: existingRecord.otherExpenses,
@@ -62,20 +62,20 @@ export default function Analytics() {
     void loadData()
   }, [])
 
-  // Debounced Auto-Save
-  useEffect(() => {
-    if (isLoading) return; // Don't save while initially loading data
+  const [isSaving, setIsSaving] = useState(false)
 
-    const timeoutId = setTimeout(async () => {
+  const handleFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsSaving(true)
+    try {
       const totalPayout = Object.values(formData.departmentPayouts).reduce((a, b) => a + b, 0)
-      const recordId = `${formData.month}-${formData.year}`
+      const recordId = formData.date
       
       const existing = data.find(d => d.id === recordId)
       
       const newData: FinancialData = {
         id: recordId,
-        month: formData.month,
-        year: formData.year,
+        date: formData.date,
         revenue: formData.revenue,
         deductions: formData.deductions,
         otherExpenses: formData.otherExpenses,
@@ -84,29 +84,26 @@ export default function Analytics() {
         createdAt: existing ? existing.createdAt : Date.now()
       }
       
-      // Optimistic update locally
+      await saveFinancialData(newData)
+      
       setData(prev => {
         const filtered = prev.filter(d => d.id !== recordId)
-        return [...filtered, newData].sort((a, b) => a.year - b.year || a.createdAt - b.createdAt)
+        return [...filtered, newData].sort((a, b) => a.date.localeCompare(b.date) || a.createdAt - b.createdAt)
       })
-      
-      // Save to Firebase
-      await saveFinancialData(newData)
-    }, 800); // Save 800ms after user stops typing
-    
-    return () => clearTimeout(timeoutId)
-  }, [formData, isLoading])
+    } catch (error) {
+      console.error(error)
+      alert('Failed to save data.')
+    } finally {
+      setIsSaving(false)
+    }
+  }
 
-  const handlePeriodChange = (field: 'month' | 'year', value: string | number) => {
-    const newMonth = field === 'month' ? value as string : formData.month;
-    const newYear = field === 'year' ? value as number : formData.year;
-    
-    const existingRecord = data.find(d => d.month === newMonth && d.year === newYear)
+  const handleDateChange = (newDate: string) => {
+    const existingRecord = data.find(d => d.date === newDate)
     
     if (existingRecord) {
       setFormData({
-        month: newMonth,
-        year: newYear,
+        date: newDate,
         revenue: existingRecord.revenue,
         deductions: existingRecord.deductions,
         otherExpenses: existingRecord.otherExpenses,
@@ -114,8 +111,7 @@ export default function Analytics() {
       })
     } else {
       setFormData({
-        month: newMonth,
-        year: newYear,
+        date: newDate,
         revenue: 0,
         deductions: 0,
         otherExpenses: 0,
@@ -156,14 +152,12 @@ export default function Analytics() {
           
           const totalPayout = engineering + sales + marketing + hrAdmin + other
           
-          const monthStr = row['Month'] || ''
-          const monthPart = monthStr.split(' ')[0] || 'January'
-          const yearPart = parseInt(monthStr.split(' ')[1]) || new Date().getFullYear()
+          const monthStr = row['Date'] || ''
+          const dateStr = monthStr || new Date().toISOString().split('T')[0]
 
           const newData: FinancialData = {
             id: crypto.randomUUID(),
-            month: monthPart,
-            year: yearPart,
+            date: dateStr,
             revenue: parseFloat(row['Revenue']) || 0,
             deductions: parseFloat(row['Deductions']) || 0,
             otherExpenses: parseFloat(row['Other Expenses']) || 0,
@@ -181,7 +175,7 @@ export default function Analytics() {
 
   const downloadTemplate = () => {
     const templateData = [{
-      Month: 'January 2026',
+      Date: '2026-01-01',
       Revenue: 500000,
       'Eng Payout': 150000,
       'Sales Payout': 80000,
@@ -201,7 +195,7 @@ export default function Analytics() {
 
   const exportToCSV = () => {
     const csvData = data.map(d => ({
-      Month: `${d.month} ${d.year}`,
+      Date: d.date,
       Revenue: d.revenue,
       'Total Payout': d.payout,
       'Eng Payout': d.departmentPayouts.engineering,
@@ -224,15 +218,14 @@ export default function Analytics() {
   const loadDemoData = async () => {
     setIsLoading(true);
     const demoData = [
-      { month: 'January', year: 2026, revenue: 500000, payout: 150000, deductions: 5000, otherExpenses: 20000, eng: 40000, sales: 50000, mktg: 30000, hr: 20000, other: 10000 },
-      { month: 'February', year: 2026, revenue: 550000, payout: 160000, deductions: 8000, otherExpenses: 25000, eng: 45000, sales: 55000, mktg: 30000, hr: 20000, other: 10000 },
-      { month: 'March', year: 2026, revenue: 480000, payout: 160000, deductions: 4000, otherExpenses: 20000, eng: 45000, sales: 55000, mktg: 30000, hr: 20000, other: 10000 },
+      { date: '2026-01-01', revenue: 500000, payout: 150000, deductions: 5000, otherExpenses: 20000, eng: 40000, sales: 50000, mktg: 30000, hr: 20000, other: 10000 },
+      { date: '2026-01-02', revenue: 550000, payout: 160000, deductions: 8000, otherExpenses: 25000, eng: 45000, sales: 55000, mktg: 30000, hr: 20000, other: 10000 },
+      { date: '2026-01-03', revenue: 480000, payout: 160000, deductions: 4000, otherExpenses: 20000, eng: 45000, sales: 55000, mktg: 30000, hr: 20000, other: 10000 },
     ];
     for (const d of demoData) {
       const newData: FinancialData = {
         id: crypto.randomUUID(),
-        month: d.month,
-        year: d.year,
+        date: d.date,
         revenue: d.revenue,
         deductions: d.deductions,
         otherExpenses: d.otherExpenses,
@@ -260,8 +253,6 @@ export default function Analytics() {
     html2pdf().set(opt).from(element).save()
   }
 
-  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
-
   const totalRevenue = data.reduce((acc, curr) => acc + curr.revenue, 0)
   const totalPayouts = data.reduce((acc, curr) => acc + curr.payout, 0)
   const totalDeductions = data.reduce((acc, curr) => acc + curr.deductions, 0)
@@ -270,7 +261,7 @@ export default function Analytics() {
   const profitMargin = totalRevenue > 0 ? ((netSavings / totalRevenue) * 100).toFixed(1) : '0'
 
   const chartData = data.map(d => ({
-    name: `${d.month.slice(0,3)} ${d.year}`,
+    name: new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' }),
     Revenue: d.revenue,
     Expenses: d.payout + d.otherExpenses - d.deductions,
     Profit: d.revenue - (d.payout - d.deductions) - d.otherExpenses
@@ -285,6 +276,16 @@ export default function Analytics() {
     { name: 'Other Expenses', value: totalExpenses, color: '#64748b' },
     { name: 'Deductions (Recovered)', value: totalDeductions, color: '#a855f7' }
   ].filter(item => item.value > 0);
+
+  // Department Payouts Chart Data
+  const deptPayoutsData = data.map(d => ({
+    name: new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+    Engineering: d.departmentPayouts.engineering || 0,
+    Sales: d.departmentPayouts.sales || 0,
+    Marketing: d.departmentPayouts.marketing || 0,
+    HR_Admin: d.departmentPayouts.hrAdmin || 0,
+    Other: d.departmentPayouts.other || 0,
+  }))
 
   return (
     <div className="space-y-8 pb-20 animate-fade-in relative z-10">
@@ -305,33 +306,35 @@ export default function Analytics() {
           </p>
         </div>
         
-        <div className="flex flex-wrap items-center gap-3">
-          <button onClick={() => setShowGuide(true)} className="group flex items-center gap-2 rounded-full bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200 transition-all hover:bg-slate-50 hover:shadow-md">
-            <Icons.Info />
-            How it Works
-          </button>
-          
-          <button onClick={downloadTemplate} className="group flex items-center gap-2 rounded-full bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 shadow-sm ring-1 ring-emerald-200 transition-all hover:bg-emerald-100 hover:shadow-md">
-            <Icons.Download />
-            Template
-          </button>
-          
-          <label className="group flex cursor-pointer items-center gap-2 rounded-full bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200 transition-all hover:bg-slate-50 hover:shadow-md">
-            <Icons.Upload />
-            Import CSV
-            <input type="file" accept=".csv" className="hidden" onChange={handleImportCSV} />
-          </label>
-          
-          <div className="h-6 w-px bg-slate-200 mx-1"></div>
-          
-          <button onClick={exportToCSV} className="group flex items-center gap-2 rounded-full bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:bg-slate-800 hover:shadow-lg hover:-translate-y-0.5">
-            CSV
-          </button>
-          
-          <button onClick={exportToPDF} className="group flex items-center gap-2 rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-500/30 transition-all hover:shadow-blue-500/50 hover:-translate-y-0.5">
-            Download PDF
-          </button>
-        </div>
+        {!isSuperAdmin && (
+          <div className="flex flex-wrap items-center gap-3">
+            <button onClick={() => setShowGuide(true)} className="group flex items-center gap-2 rounded-full bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200 transition-all hover:bg-slate-50 hover:shadow-md">
+              <Icons.Info />
+              How it Works
+            </button>
+            
+            <button onClick={downloadTemplate} className="group flex items-center gap-2 rounded-full bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 shadow-sm ring-1 ring-emerald-200 transition-all hover:bg-emerald-100 hover:shadow-md">
+              <Icons.Download />
+              Template
+            </button>
+            
+            <label className="group flex cursor-pointer items-center gap-2 rounded-full bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200 transition-all hover:bg-slate-50 hover:shadow-md">
+              <Icons.Upload />
+              Import CSV
+              <input type="file" accept=".csv" className="hidden" onChange={handleImportCSV} />
+            </label>
+            
+            <div className="h-6 w-px bg-slate-200 mx-1"></div>
+            
+            <button onClick={exportToCSV} className="group flex items-center gap-2 rounded-full bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:bg-slate-800 hover:shadow-lg hover:-translate-y-0.5">
+              CSV
+            </button>
+            
+            <button onClick={exportToPDF} className="group flex items-center gap-2 rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-500/30 transition-all hover:shadow-blue-500/50 hover:-translate-y-0.5">
+              Download PDF
+            </button>
+          </div>
+        )}
       </div>
 
       {/* KPI Cards */}
@@ -403,43 +406,28 @@ export default function Analytics() {
       <div className="grid gap-8 lg:grid-cols-12" id="analytics-report">
         
         {/* ADD DATA FORM SIDEBAR */}
-        <div className="lg:col-span-4" data-html2canvas-ignore>
-          <div className="sticky top-24 rounded-3xl border border-white/40 bg-white/60 p-6 shadow-2xl shadow-slate-200/50 backdrop-blur-xl">
+        {!isSuperAdmin && (
+          <div className="lg:col-span-4" data-html2canvas-ignore>
+            <div className="sticky top-24 rounded-3xl border border-white/40 bg-white/60 p-6 shadow-2xl shadow-slate-200/50 backdrop-blur-xl">
             <div className="mb-6">
               <h2 className="text-xl font-bold text-slate-900">Log Financial Data</h2>
               <p className="text-sm text-slate-500 mt-1">Record the monthly flow of funds securely.</p>
             </div>
             
-            <div className="space-y-5">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Month</label>
-                  <select 
-                    className="w-full rounded-xl border-0 bg-slate-100/50 px-4 py-3 text-sm text-slate-900 shadow-inner ring-1 ring-inset ring-slate-200 focus:bg-white focus:ring-2 focus:ring-inset focus:ring-blue-500 transition-all outline-none"
-                    value={formData.month}
-                    onChange={e => handlePeriodChange('month', e.target.value)}
-                  >
-                    {months.map(m => <option key={m} value={m}>{m}</option>)}
-                  </select>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Year</label>
-                  <input 
-                    type="number" 
-                    className="w-full rounded-xl border-0 bg-slate-100/50 px-4 py-3 text-sm text-slate-900 shadow-inner ring-1 ring-inset ring-slate-200 focus:bg-white focus:ring-2 focus:ring-inset focus:ring-blue-500 transition-all outline-none"
-                    value={formData.year}
-                    onChange={e => handlePeriodChange('year', parseInt(e.target.value) || new Date().getFullYear())}
-                  />
-                </div>
+            <form className="space-y-5" onSubmit={handleFormSubmit}>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Date</label>
+                <input 
+                  type="date"
+                  className="w-full rounded-xl border-0 bg-slate-100/50 px-4 py-3 text-sm text-slate-900 shadow-inner ring-1 ring-inset ring-slate-200 focus:bg-white focus:ring-2 focus:ring-inset focus:ring-blue-500 transition-all outline-none"
+                  value={formData.date}
+                  onChange={e => handleDateChange(e.target.value)}
+                />
               </div>
               
               <div className="space-y-1.5">
                 <label className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-slate-500">
                   Total Revenue (₹)
-                  <span className="text-[10px] font-medium text-emerald-500 normal-case bg-emerald-50 px-2 py-0.5 rounded-full flex items-center gap-1">
-                    <span className="relative flex h-1.5 w-1.5"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span><span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span></span>
-                    Auto-saving
-                  </span>
                 </label>
                 <div className="relative">
                   <span className="absolute left-4 top-1/2 -translate-y-1/2 font-semibold text-slate-400">₹</span>
@@ -504,14 +492,34 @@ export default function Analytics() {
                   />
                 </div>
               </div>
-            </div>
+
+              <button 
+                type="submit" 
+                disabled={isSaving}
+                className="mt-6 w-full rounded-xl bg-slate-900 py-3 text-sm font-bold text-white shadow-lg transition-all hover:bg-slate-800 disabled:opacity-50"
+              >
+                {isSaving ? 'Saving...' : 'Save Financial Data'}
+              </button>
+            </form>
           </div>
         </div>
+        )}
 
         {/* CHARTS & TABLE MAIN CONTENT */}
-        <div className="lg:col-span-8 space-y-8">
+        <div className={isSuperAdmin ? "lg:col-span-12 space-y-8" : "lg:col-span-8 space-y-8"}>
           
-          {/* INTERACTIVE CHARTS */}
+          {!isSuperAdmin && (
+            <div className="flex justify-end">
+              <button onClick={() => setShowVisualsModal(true)} className="rounded-xl bg-blue-600 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-blue-500/30 transition-all hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-blue-500/40">
+                <span className="flex items-center gap-2">
+                  <Icons.ChartUp /> View Analytics Visuals
+                </span>
+              </button>
+            </div>
+          )}
+
+          {/* INTERACTIVE CHARTS (Shown inline ONLY for Super Admin) */}
+          {isSuperAdmin && (
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
             <div className="rounded-3xl border border-slate-200/60 bg-white/60 p-6 shadow-xl shadow-slate-200/40 backdrop-blur-xl">
               <div className="mb-6">
@@ -601,12 +609,50 @@ export default function Analytics() {
                 )}
               </div>
             </div>
+            
+            {isSuperAdmin && (
+              <div className="rounded-3xl border border-slate-200/60 bg-white/60 p-6 shadow-xl shadow-slate-200/40 backdrop-blur-xl md:col-span-2 xl:col-span-1">
+                <div className="mb-2">
+                  <h2 className="text-xl font-bold text-slate-900">Department Payouts Breakdown</h2>
+                  <p className="text-sm text-slate-500">Analyze the salary distribution across teams.</p>
+                </div>
+                
+                <div className="h-[250px] w-full mt-4">
+                  {data.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <ComposedChart data={deptPayoutsData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} dy={10} />
+                        <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} tickFormatter={(val) => `₹${val/1000}k`} dx={-10} />
+                        <RechartsTooltip 
+                          contentStyle={{ borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)' }}
+                          itemStyle={{ fontWeight: 600 }}
+                          formatter={(value: any) => [`₹${Number(value).toLocaleString('en-IN')}`, undefined]}
+                        />
+                        <Legend iconType="circle" wrapperStyle={{ fontSize: '11px', paddingTop: '10px', fontWeight: 500 }} />
+                        <Bar dataKey="Engineering" stackId="a" fill="#3b82f6" />
+                        <Bar dataKey="Sales" stackId="a" fill="#10b981" />
+                        <Bar dataKey="Marketing" stackId="a" fill="#f59e0b" />
+                        <Bar dataKey="HR_Admin" stackId="a" fill="#8b5cf6" />
+                        <Bar dataKey="Other" stackId="a" fill="#64748b" radius={[4, 4, 0, 0]} />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-slate-400">
+                      {isLoading ? '...' : 'No data to map'}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
+          )}
 
           {/* BREAKDOWN TABLE */}
-          <div className="overflow-hidden rounded-3xl border border-slate-200/60 bg-white/60 shadow-xl shadow-slate-200/40 backdrop-blur-xl">
-            <div className="border-b border-slate-100 p-6">
-              <h2 className="text-xl font-bold text-slate-900">Historical Records</h2>
+          {!isSuperAdmin && (
+            <div className="overflow-hidden rounded-3xl border border-slate-200/60 bg-white/60 shadow-xl shadow-slate-200/40 backdrop-blur-xl">
+              <div className="border-b border-slate-100 p-6">
+                <h2 className="text-xl font-bold text-slate-900">Historical Records</h2>
               <p className="text-sm text-slate-500">Detailed month-by-month financial ledger.</p>
             </div>
             
@@ -620,7 +666,7 @@ export default function Analytics() {
                     <th className="px-6 py-4 hidden 2xl:table-cell">Dept Breakdown</th>
                     <th className="px-6 py-4">Cuts/Exp</th>
                     <th className="px-6 py-4">Net Profit</th>
-                    <th className="px-6 py-4 text-right" data-html2canvas-ignore>Actions</th>
+                    {!isSuperAdmin && <th className="px-6 py-4 text-right" data-html2canvas-ignore>Actions</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -637,7 +683,9 @@ export default function Analytics() {
                       
                       return (
                         <tr key={row.id} className="group hover:bg-slate-50 transition-colors">
-                          <td className="px-6 py-4 font-bold text-slate-900">{row.month} <span className="font-medium text-slate-500">{row.year}</span></td>
+                          <td className="px-6 py-4 font-bold text-slate-900">
+                            {new Date(row.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </td>
                           <td className="px-6 py-4 font-semibold text-blue-600">₹{row.revenue.toLocaleString('en-IN')}</td>
                           <td className="px-6 py-4 font-semibold text-orange-600">₹{row.payout.toLocaleString('en-IN')}</td>
                           <td className="px-6 py-4 hidden 2xl:table-cell">
@@ -655,14 +703,16 @@ export default function Analytics() {
                               {isProfit ? '+' : '-'}₹{Math.abs(safe).toLocaleString('en-IN')}
                             </span>
                           </td>
-                          <td className="px-6 py-4 text-right" data-html2canvas-ignore>
-                            <button 
-                              onClick={() => handleDelete(row.id)}
-                              className="inline-flex items-center text-xs font-bold text-rose-600 hover:text-rose-800 bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
-                            >
-                              Delete
-                            </button>
-                          </td>
+                          {!isSuperAdmin && (
+                            <td className="px-6 py-4 text-right" data-html2canvas-ignore>
+                              <button 
+                                onClick={() => handleDelete(row.id)}
+                                className="inline-flex items-center text-xs font-bold text-rose-600 hover:text-rose-800 bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                              >
+                                Delete
+                              </button>
+                            </td>
+                          )}
                         </tr>
                       )
                     })
@@ -671,6 +721,7 @@ export default function Analytics() {
               </table>
             </div>
           </div>
+          )}
         </div>
       </div>
 
@@ -727,6 +778,139 @@ export default function Analytics() {
             >
               Let's get started
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* VISUALS MODAL FOR ADMIN */}
+      {showVisualsModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-200/60 p-4 backdrop-blur-2xl animate-fade-in custom-scrollbar">
+          <div className="min-h-full flex flex-col justify-center max-w-7xl mx-auto w-full py-10">
+            <div className="flex justify-between items-center mb-10">
+              <div>
+                <h2 className="text-4xl font-black text-slate-900 tracking-tight drop-shadow-sm">Financial Analytics Overview</h2>
+                <p className="text-slate-600 mt-2 font-medium">A high-level visual breakdown of your financial data.</p>
+              </div>
+              <button onClick={() => setShowVisualsModal(false)} className="rounded-full bg-white p-3.5 text-slate-500 hover:bg-slate-50 hover:text-rose-500 shadow-xl shadow-slate-200/50 border border-slate-100 transition-all hover:rotate-90 hover:scale-110">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+              {/* Card 1 */}
+              <div className="rounded-[2.5rem] border border-white/60 bg-white/70 p-8 shadow-2xl shadow-slate-200/50 backdrop-blur-xl transition-all hover:-translate-y-1 hover:shadow-slate-300/60">
+                <div className="mb-8">
+                  <h2 className="text-2xl font-extrabold text-slate-900">Trends & Margins</h2>
+                  <p className="text-sm font-semibold text-slate-500 mt-1">Visualize revenue against expenses.</p>
+                </div>
+                
+                <div className="h-[380px] w-full">
+                  {data.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="colorProfitLight" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.25}/>
+                            <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="#e2e8f0" />
+                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 13, fill: '#64748b', fontWeight: 600 }} dy={10} />
+                        <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 13, fill: '#64748b', fontWeight: 600 }} tickFormatter={(val) => `₹${val/1000}k`} dx={-10} />
+                        <RechartsTooltip 
+                          contentStyle={{ borderRadius: '20px', border: '1px solid #f1f5f9', backgroundColor: '#ffffff', color: '#0f172a', boxShadow: '0 25px 50px -12px rgb(0 0 0 / 0.15)' }}
+                          itemStyle={{ fontWeight: 700 }}
+                          formatter={(value: any) => [`₹${Number(value).toLocaleString('en-IN')}`, undefined]}
+                        />
+                        <Legend iconType="circle" wrapperStyle={{ fontSize: '13px', paddingTop: '20px', fontWeight: 700, color: '#334155' }} />
+                        <Bar dataKey="Revenue" barSize={16} fill="#3b82f6" radius={[6, 6, 0, 0]} />
+                        <Bar dataKey="Expenses" barSize={16} fill="#f97316" radius={[6, 6, 0, 0]} />
+                        <Area type="monotone" dataKey="Profit" stroke="#10b981" strokeWidth={4} fillOpacity={1} fill="url(#colorProfitLight)" />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex h-full items-center justify-center font-bold text-slate-400">No data available</div>
+                  )}
+                </div>
+              </div>
+
+              {/* Card 2 */}
+              <div className="rounded-[2.5rem] border border-white/60 bg-white/70 p-8 shadow-2xl shadow-slate-200/50 backdrop-blur-xl transition-all hover:-translate-y-1 hover:shadow-slate-300/60">
+                <div className="mb-4">
+                  <h2 className="text-2xl font-extrabold text-slate-900">Overall Distribution</h2>
+                  <p className="text-sm font-semibold text-slate-500 mt-1">Where the total revenue goes.</p>
+                </div>
+                
+                <div className="h-[380px] w-full">
+                  {data.length > 0 && pieData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={pieData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={90}
+                          outerRadius={130}
+                          paddingAngle={6}
+                          dataKey="value"
+                          stroke="none"
+                        >
+                          {pieData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <RechartsTooltip 
+                          contentStyle={{ borderRadius: '20px', border: '1px solid #f1f5f9', backgroundColor: '#ffffff', color: '#0f172a', boxShadow: '0 25px 50px -12px rgb(0 0 0 / 0.15)' }}
+                          itemStyle={{ fontWeight: 700 }}
+                          formatter={(value: any) => [`₹${Number(value).toLocaleString('en-IN')}`, undefined]}
+                        />
+                        <Legend 
+                          layout="vertical" 
+                          verticalAlign="middle" 
+                          align="right"
+                          iconType="circle" 
+                          wrapperStyle={{ fontSize: '13px', fontWeight: 700, color: '#334155' }} 
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex h-full items-center justify-center font-bold text-slate-400">No data available</div>
+                  )}
+                </div>
+              </div>
+              
+              {/* Card 3 */}
+              <div className="rounded-[2.5rem] border border-white/60 bg-white/70 p-8 shadow-2xl shadow-slate-200/50 backdrop-blur-xl xl:col-span-2 transition-all hover:-translate-y-1 hover:shadow-slate-300/60">
+                <div className="mb-8">
+                  <h2 className="text-2xl font-extrabold text-slate-900">Department Payouts Breakdown</h2>
+                  <p className="text-sm font-semibold text-slate-500 mt-1">Distribution of salary expenses across departments over time.</p>
+                </div>
+                <div className="h-[400px] w-full">
+                  {deptPayoutsData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <ComposedChart data={deptPayoutsData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="#e2e8f0" />
+                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 13, fill: '#64748b', fontWeight: 600 }} dy={10} />
+                        <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 13, fill: '#64748b', fontWeight: 600 }} tickFormatter={(val) => `₹${val/1000}k`} dx={-10} />
+                        <RechartsTooltip 
+                          contentStyle={{ borderRadius: '20px', border: '1px solid #f1f5f9', backgroundColor: '#ffffff', color: '#0f172a', boxShadow: '0 25px 50px -12px rgb(0 0 0 / 0.15)' }}
+                          itemStyle={{ fontWeight: 700 }}
+                          formatter={(value: any) => [`₹${Number(value).toLocaleString('en-IN')}`, undefined]}
+                        />
+                        <Legend iconType="circle" wrapperStyle={{ fontSize: '13px', paddingTop: '20px', fontWeight: 700, color: '#334155' }} />
+                        <Bar dataKey="Engineering" stackId="a" fill="#0ea5e9" radius={[0, 0, 0, 0]} />
+                        <Bar dataKey="Sales" stackId="a" fill="#f59e0b" radius={[0, 0, 0, 0]} />
+                        <Bar dataKey="Marketing" stackId="a" fill="#ec4899" radius={[0, 0, 0, 0]} />
+                        <Bar dataKey="HR_Admin" stackId="a" fill="#8b5cf6" radius={[0, 0, 0, 0]} />
+                        <Bar dataKey="Other" stackId="a" fill="#64748b" radius={[6, 6, 0, 0]} />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex h-full items-center justify-center font-bold text-slate-400">No data available</div>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}

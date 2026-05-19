@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react'
 import { getEmployees } from '../services/employeeService'
 import { getAllTasks, createTask } from '../services/taskService'
 import type { EmployeeRecord } from '../types/employee'
+import { useAuth } from '../context/AuthContext'
 import type { TaskRecord } from '../types/task'
 
 export default function Tasks() {
+  const { isSuperAdmin } = useAuth()
   const [employees, setEmployees] = useState<EmployeeRecord[]>([])
   const [tasks, setTasks] = useState<TaskRecord[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -78,8 +80,9 @@ export default function Tasks() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Create Task Form */}
-        <div className="lg:col-span-1 rounded-[2rem] bg-white p-6 shadow-xl shadow-slate-200/50">
-          <h2 className="text-lg font-bold text-slate-900 mb-4">Assign New Task</h2>
+        {!isSuperAdmin && (
+          <div className="lg:col-span-1 rounded-[2rem] bg-white p-6 shadow-xl shadow-slate-200/50">
+            <h2 className="text-lg font-bold text-slate-900 mb-4">Assign New Task</h2>
           <form onSubmit={handleCreateTask} className="space-y-4">
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Task Title</label>
@@ -163,9 +166,10 @@ export default function Tasks() {
             </button>
           </form>
         </div>
+        )}
 
         {/* Task List */}
-        <div className="lg:col-span-2 rounded-[2rem] bg-white p-6 shadow-xl shadow-slate-200/50 flex flex-col h-[700px]">
+        <div className={`${isSuperAdmin ? 'lg:col-span-3' : 'lg:col-span-2'} rounded-[2rem] bg-white p-6 shadow-xl shadow-slate-200/50 flex flex-col h-[700px]`}>
           <h2 className="text-lg font-bold text-slate-900 mb-4">All Tasks</h2>
           
           <div className="flex-1 overflow-y-auto pr-2 space-y-4 custom-scrollbar">

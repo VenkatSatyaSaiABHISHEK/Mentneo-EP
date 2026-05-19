@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom'
 import Logo from '../components/Logo'
+import { useAuth } from '../context/AuthContext'
 
 const navItems = [
   { label: 'Dashboard', path: '/' },
@@ -13,6 +14,12 @@ const navItems = [
 ]
 
 export default function Sidebar() {
+  const { isSuperAdmin } = useAuth()
+
+  const visibleNavItems = isSuperAdmin
+    ? navItems.filter(item => ['Employees', 'Analytics', 'Profile'].includes(item.label))
+    : navItems
+
   return (
     <aside className="sticky top-0 hidden h-screen w-64 flex-col border-r border-slate-200/70 bg-white/70 p-6 backdrop-blur-xl md:flex">
       <div className="glass-panel mb-2 rounded-2xl px-4 py-3">
@@ -21,7 +28,7 @@ export default function Sidebar() {
       </div>
 
       <nav className="mt-8 flex flex-1 flex-col gap-2 text-sm">
-        {navItems.map((item, index) => (
+        {visibleNavItems.map((item, index) => (
           <NavLink
             key={item.path}
             to={item.path}

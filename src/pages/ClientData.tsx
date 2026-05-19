@@ -4,8 +4,10 @@ import Button from '../components/Button';
 import Card from '../components/Card';
 import { Client, ClientStatus } from '../types/client';
 import { getAllClients, createClient, uploadClientFile } from '../services/clientService';
+import { useAuth } from '../context/AuthContext';
 
 export default function ClientData() {
+  const { isSuperAdmin } = useAuth();
   const [clients, setClients] = useState<Client[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -169,24 +171,28 @@ export default function ClientData() {
           </p>
         </div>
         <div className="flex flex-wrap gap-4">
-          <Button variant="outline" type="button" onClick={handleDownloadTemplate}>
-            Download Template
-          </Button>
-          <label className="relative cursor-pointer">
-            <input
-              type="file"
-              accept=".csv"
-              className="absolute inset-0 opacity-0 cursor-pointer"
-              onChange={handleCsvUpload}
-              disabled={isUploading}
-            />
-            <Button variant="outline" type="button" className={isUploading ? "opacity-50 pointer-events-none" : ""}>
-              {isUploading ? 'Uploading...' : 'Upload CSV'}
-            </Button>
-          </label>
-          <Button variant="primary" onClick={() => setIsModalOpen(true)}>
-            Add New Client
-          </Button>
+          {!isSuperAdmin && (
+            <>
+              <Button variant="outline" type="button" onClick={handleDownloadTemplate}>
+                Download Template
+              </Button>
+              <label className="relative cursor-pointer">
+                <input
+                  type="file"
+                  accept=".csv"
+                  className="absolute inset-0 opacity-0 cursor-pointer"
+                  onChange={handleCsvUpload}
+                  disabled={isUploading}
+                />
+                <Button variant="outline" type="button" className={isUploading ? "opacity-50 pointer-events-none" : ""}>
+                  {isUploading ? 'Uploading...' : 'Upload CSV'}
+                </Button>
+              </label>
+              <Button variant="primary" onClick={() => setIsModalOpen(true)}>
+                Add New Client
+              </Button>
+            </>
+          )}
         </div>
       </section>
 
