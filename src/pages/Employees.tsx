@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
 import QRCode from 'qrcode'
 import Button from '../components/Button'
 import Card from '../components/Card'
@@ -11,6 +11,9 @@ import type { AttendanceRecord } from '../types/attendance'
 import { signInWithEmailAndPassword } from 'firebase/auth'
 import { auth } from '../services/firebase'
 import { useAuth } from '../context/AuthContext'
+import Papa from 'papaparse'
+// @ts-ignore
+import html2pdf from 'html2pdf.js'
 
 export default function Employees() {
   const { user, isSuperAdmin } = useAuth()
@@ -22,6 +25,85 @@ export default function Employees() {
   const [showAddForm, setShowAddForm] = useState(false)
   const [isAdding, setIsAdding] = useState(false)
   const [formData, setFormData] = useState({ name: '', email: '', phone: '', role: '', salary: '', joinDate: '', profileImageUrl: '', password: '' })
+
+  const pdfTemplateRef = useRef<HTMLDivElement>(null)
+  const [pdfEmployee, setPdfEmployee] = useState<EmployeeRecord | null>(null)
+  const [pdfQrCode, setPdfQrCode] = useState<string>('')
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false)
+
+  const handleExportCsv = () => {
+    const dataToExport = filteredEmployees.map(emp => ({
+      'Employee ID': emp.employeeId,
+      'Name': emp.name,
+      'Email': emp.email,
+      'Role': emp.role,
+      'Portal URL': `${window.location.origin}/app/${emp.employeeId}`,
+      'Password': emp.password || 'N/A'
+    }))
+
+    const csv = Papa.unparse(dataToExport)
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    const url = URL.createObjectURL(blob)
+    link.setAttribute('href', url)
+    link.setAttribute('download', `mentneo_employee_credentials_${new Date().toISOString().split('T')[0]}.csv`)
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
+  const handleDownloadPdfPass = async (emp: EmployeeRecord) => {
+    setIsGeneratingPdf(true)
+    setPdfEmployee(emp)
+    try {
+      const portalUrl = `${window.location.origin}/app/${emp.employeeId}`
+      const qrUrl = await QRCode.toDataURL(portalUrl, {
+        margin: 1,
+        width: 512,
+        color: {
+          dark: '#0f172a',
+          light: '#ffffff'
+        }
+      })
+      setPdfQrCode(qrUrl)
+    } catch (err) {
+      console.error('Failed to generate QR code for PDF', err)
+      alert('Failed to generate credentials QR code')
+      setPdfEmployee(null)
+      setIsGeneratingPdf(false)
+    }
+  }
+
+  useEffect(() => {
+    if (pdfEmployee && pdfQrCode && pdfTemplateRef.current) {
+      const element = pdfTemplateRef.current
+      const opt = {
+        margin:       15,
+        filename:     `${pdfEmployee.employeeId}_${pdfEmployee.name.replace(/\s+/g, '_')}_Access_Pass.pdf`,
+        image:        { type: 'jpeg' as const, quality: 0.98 },
+        html2canvas:  { scale: 2, useCORS: true, logging: false },
+        jsPDF:        { unit: 'mm' as const, format: 'a4' as const, orientation: 'portrait' as const }
+      }
+
+      html2pdf()
+        .set(opt)
+        .from(element)
+        .save()
+        .then(() => {
+          setPdfEmployee(null)
+          setPdfQrCode('')
+          setIsGeneratingPdf(false)
+        })
+        .catch((err: any) => {
+          console.error('PDF generation failed:', err)
+          alert('Failed to generate credentials PDF pass')
+          setPdfEmployee(null)
+          setPdfQrCode('')
+          setIsGeneratingPdf(false)
+        })
+    }
+  }, [pdfEmployee, pdfQrCode])
 
   // Direct QR Download function
   const handleDownloadQr = async (emp: EmployeeRecord) => {
@@ -149,6 +231,13 @@ export default function Employees() {
               className="rounded-full bg-slate-900 px-3 py-1 text-xs text-white transition hover:bg-slate-800"
             >
               Download QR
+            </button>
+            <button
+              onClick={() => handleDownloadPdfPass(row)}
+              disabled={isGeneratingPdf}
+              className="rounded-full bg-indigo-600 px-3 py-1 text-xs text-white transition hover:bg-indigo-700 disabled:opacity-50"
+            >
+              {isGeneratingPdf && pdfEmployee?.id === row.id ? 'Downloading...' : 'Download Pass (PDF)'}
             </button>
           </div>
           <div className="flex items-center gap-2 text-xs">
@@ -451,7 +540,15 @@ export default function Employees() {
             <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Employee list</p>
             <h3 className="mt-2 text-lg font-semibold text-slate-900">Active roster</h3>
           </div>
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap gap-3 items-center">
+            {!isSuperAdmin && (
+              <button
+                onClick={handleExportCsv}
+                className="rounded-full bg-emerald-600 hover:bg-emerald-700 px-4 py-2 text-sm font-semibold text-white transition shadow-sm"
+              >
+                Export Credentials CSV
+              </button>
+            )}
             <input
               type="text"
               placeholder="Search by name or ID"
@@ -588,6 +685,80 @@ export default function Employees() {
           </form>
         </div>
       )}
+
+      {/* Hidden off-screen PDF template */}
+      <div style={{ position: 'absolute', left: '-9999px', top: '-9999px' }}>
+        {pdfEmployee && (
+          <div ref={pdfTemplateRef} className="w-[750px] p-10 bg-white border border-slate-200 shadow-sm rounded-[2.5rem] text-slate-800 flex flex-col gap-6" style={{ fontFamily: 'system-ui, sans-serif' }}>
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-6">
+              <div className="flex items-center gap-3">
+                <div className="w-4 h-4 rounded-full bg-emerald-500 shadow-md"></div>
+                <span className="font-extrabold tracking-[0.3em] text-lg uppercase text-slate-900">MENTNEO</span>
+              </div>
+              <div className="text-right">
+                <span className="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 uppercase tracking-wider border border-emerald-100">
+                  Verified Team Pass
+                </span>
+              </div>
+            </div>
+
+            {/* Main content grid */}
+            <div className="grid grid-cols-12 gap-8 items-center py-4">
+              {/* Left Column: Details */}
+              <div className="col-span-7 space-y-6">
+                <div>
+                  <h1 className="text-3xl font-black text-slate-900 tracking-tight leading-none">{pdfEmployee.name}</h1>
+                  <p className="text-sm font-bold text-emerald-600 uppercase tracking-widest mt-2">{pdfEmployee.role}</p>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Employee ID</span>
+                    <span className="text-base font-mono font-bold text-slate-900 bg-slate-100 px-3 py-1.5 rounded-lg w-fit">{pdfEmployee.employeeId}</span>
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Portal Access Password</span>
+                    <span className="text-lg font-mono font-black text-emerald-800 bg-emerald-50 border border-emerald-100 px-4 py-2 rounded-xl w-fit tracking-widest">{pdfEmployee.password || 'N/A'}</span>
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Portal Web Link (PWA)</span>
+                    <span className="text-sm font-mono font-bold text-sky-600 break-all">{window.location.origin}/app/{pdfEmployee.employeeId}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column: QR Code */}
+              <div className="col-span-5 flex flex-col items-center justify-center border-l border-slate-100 pl-6">
+                <div className="p-4 bg-slate-50 border border-slate-100 rounded-3xl shadow-inner flex flex-col items-center">
+                  <img src={pdfQrCode} alt="Access QR Code" className="w-[180px] h-[180px] object-contain rounded-2xl" />
+                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-3">Scan to Log In</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer instructions */}
+            <div className="mt-4 pt-6 border-t border-slate-100 space-y-4">
+              <div className="bg-slate-50 rounded-2xl p-5 border border-slate-100 text-xs text-slate-600 leading-relaxed">
+                <h4 className="font-bold text-slate-800 uppercase tracking-wider mb-2">How to Access Your Portal:</h4>
+                <ol className="list-decimal list-inside space-y-1.5">
+                  <li>Open your mobile camera or any QR code scanner.</li>
+                  <li>Scan the QR code on the right, or visit the Portal Web Link on any browser.</li>
+                  <li>Enter your secure Portal Access Password shown above to unlock your account.</li>
+                  <li>Mark your attendance, view tasks, and check details directly from your portal.</li>
+                </ol>
+              </div>
+
+              <div className="flex items-center gap-2 text-[10px] font-semibold text-rose-500 uppercase tracking-wider">
+                <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                Keep this document secure. Do not share your login credentials or QR code.
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
