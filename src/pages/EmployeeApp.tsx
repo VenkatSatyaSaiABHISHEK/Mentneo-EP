@@ -6,6 +6,7 @@ import { getTasksForRole, getTasksForEmployee } from '../services/taskService'
 import EmployeeTaskModule from '../components/EmployeeTaskModule'
 import type { EmployeeRecord } from '../types/employee'
 import type { TaskRecord } from '../types/task'
+import QRCode from 'qrcode'
 
 export default function EmployeeApp() {
   const { employeeId } = useParams()
@@ -16,6 +17,24 @@ export default function EmployeeApp() {
   const [isLoading, setIsLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'home' | 'tasks'>('home')
   const [hasNewTasks, setHasNewTasks] = useState(false)
+  const [qrCodeUrl, setQrCodeUrl] = useState('')
+
+  useEffect(() => {
+    if (employee) {
+      QRCode.toDataURL(employee.employeeId, {
+        margin: 1,
+        width: 300,
+        color: {
+          dark: '#0f172a',
+          light: '#ffffff'
+        }
+      }).then(url => {
+        setQrCodeUrl(url)
+      }).catch(err => {
+        console.error('Failed to generate attendance QR code:', err)
+      })
+    }
+  }, [employee])
   
   // Basic mock auth state
   const [isAuthenticated, setIsAuthenticated] = useState(false)
@@ -223,6 +242,31 @@ export default function EmployeeApp() {
                 <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">Leave Bal.</p>
                 <p className="text-4xl font-black text-slate-900">12</p>
                 <p className="mt-1 text-[10px] font-bold text-sky-500 uppercase">Available</p>
+              </div>
+            </div>
+
+            {/* Attendance QR Pass Card */}
+            <div className="mb-6 rounded-[2rem] bg-white p-6 shadow-xl shadow-slate-200/50 flex flex-col items-center">
+              <div className="w-full flex justify-between items-center mb-4 border-b border-slate-100 pb-3">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Identity Pass</p>
+                  <h3 className="text-lg font-bold text-slate-900">Attendance QR Code</h3>
+                </div>
+                <div className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse"></div>
+              </div>
+              
+              <div className="flex flex-col items-center gap-4 py-2 w-full">
+                {qrCodeUrl ? (
+                  <div className="p-4 bg-slate-50 border border-slate-100 rounded-3xl shadow-inner flex flex-col items-center">
+                    <img src={qrCodeUrl} alt="Scan QR Code" className="w-48 h-48 object-contain rounded-2xl" />
+                    <div className="text-center mt-3">
+                      <p className="text-xs font-mono font-black text-slate-800 tracking-widest">{employee.employeeId}</p>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-1">Scan at Kiosk to Check In</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="w-48 h-48 bg-slate-100 animate-pulse rounded-3xl"></div>
+                )}
               </div>
             </div>
 
