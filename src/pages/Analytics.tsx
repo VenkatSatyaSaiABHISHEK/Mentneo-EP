@@ -5,6 +5,7 @@ import Papa from 'papaparse'
 // @ts-ignore
 import html2pdf from 'html2pdf.js'
 import { useAuth } from '../context/AuthContext'
+import { getAllClients } from '../services/clientService'
 
 // Simple elegant SVG Icons
 const Icons = {
@@ -15,6 +16,7 @@ const Icons = {
   Upload: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>,
   Download: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>,
   Info: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+  PendingAmount: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
 }
 
 export default function Analytics() {
@@ -23,6 +25,7 @@ export default function Analytics() {
   const [isLoading, setIsLoading] = useState(true)
   const [showGuide, setShowGuide] = useState(false)
   const [showVisualsModal, setShowVisualsModal] = useState(false)
+  const [totalClientPending, setTotalClientPending] = useState(0)
 
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
@@ -41,23 +44,32 @@ export default function Analytics() {
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true)
-      const fetchedData = await getFinancialData()
-      setData(fetchedData)
-      
-      // Auto-load today's data if it exists
-      const today = new Date().toISOString().split('T')[0]
-      const existingRecord = fetchedData.find(d => d.date === today)
-      if (existingRecord) {
-        setFormData({
-          date: existingRecord.date,
-          revenue: existingRecord.revenue,
-          deductions: existingRecord.deductions,
-          otherExpenses: existingRecord.otherExpenses,
-          departmentPayouts: existingRecord.departmentPayouts
-        })
+      try {
+        const fetchedData = await getFinancialData()
+        setData(fetchedData)
+
+        // Fetch client pending collections
+        const fetchedClients = await getAllClients()
+        const pendingSum = fetchedClients.reduce((sum, client) => sum + (Number(client.pendingAmount) || 0), 0)
+        setTotalClientPending(pendingSum)
+        
+        // Auto-load today's data if it exists
+        const today = new Date().toISOString().split('T')[0]
+        const existingRecord = fetchedData.find(d => d.date === today)
+        if (existingRecord) {
+          setFormData({
+            date: existingRecord.date,
+            revenue: existingRecord.revenue,
+            deductions: existingRecord.deductions,
+            otherExpenses: existingRecord.otherExpenses,
+            departmentPayouts: existingRecord.departmentPayouts
+          })
+        }
+      } catch (error) {
+        console.error('Error loading analytics data:', error)
+      } finally {
+        setIsLoading(false)
       }
-      
-      setIsLoading(false)
     }
     void loadData()
   }, [])
@@ -338,7 +350,7 @@ export default function Analytics() {
       </div>
 
       {/* KPI Cards */}
-      <section className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+      <section className="grid gap-6 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
         {/* Card 1: Revenue */}
         <div className="group relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-500 to-indigo-600 p-6 text-white shadow-xl shadow-blue-500/20 transition-all hover:-translate-y-1 hover:shadow-blue-500/40">
           <div className="absolute -right-6 -top-6 h-32 w-32 rounded-full bg-white/10 blur-2xl transition-transform group-hover:scale-150"></div>
@@ -400,6 +412,21 @@ export default function Analytics() {
             <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs font-bold text-white backdrop-blur-md">{profitMargin}%</span>
             <span className="text-sm text-emerald-100 opacity-90">Final safe margin</span>
           </div>
+        </div>
+
+        {/* Card 5: Pending Collections */}
+        <div className="group relative overflow-hidden rounded-3xl bg-gradient-to-br from-amber-500 to-orange-600 p-6 text-white shadow-xl shadow-amber-500/20 transition-all hover:-translate-y-1 hover:shadow-amber-500/40">
+          <div className="absolute -right-6 -top-6 h-32 w-32 rounded-full bg-white/10 blur-2xl transition-transform group-hover:scale-150"></div>
+          <div className="relative z-10 flex items-center justify-between">
+            <p className="text-xs font-semibold uppercase tracking-wider text-amber-100">Pending Collections</p>
+            <div className="rounded-xl bg-white/20 p-2 backdrop-blur-md">
+              <Icons.PendingAmount />
+            </div>
+          </div>
+          <h3 className="relative z-10 mt-4 text-3xl font-bold tracking-tight">
+            {isLoading ? '...' : `₹${totalClientPending.toLocaleString('en-IN')}`}
+          </h3>
+          <p className="relative z-10 mt-1 text-sm text-amber-100 opacity-90">Outstanding client balance</p>
         </div>
       </section>
 

@@ -195,6 +195,29 @@ export default function Tasks() {
                         {task.status === 'Delivered' && <span className="bg-indigo-100 text-indigo-700 text-[10px] px-2 py-1 rounded-full font-bold uppercase tracking-wider">Delivered</span>}
                       </div>
                     </div>
+
+                    {task.clientName && (
+                      <div className="mt-3 p-3 bg-blue-50/40 rounded-xl border border-blue-100/50 grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
+                        <div>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Lead Name</span>
+                          <span className="font-semibold text-slate-700">{task.clientName}</span>
+                        </div>
+                        {task.selectedPackage && (
+                          <div>
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Package</span>
+                            <span className="font-semibold text-slate-700">{task.selectedPackage}</span>
+                          </div>
+                        )}
+                        <div>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Paid Amount</span>
+                          <span className="font-semibold text-emerald-600">₹{(task.paidAmount || 0).toLocaleString('en-IN')}</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Pending to Pay</span>
+                          <span className="font-bold text-rose-600">₹{(task.pendingAmount || 0).toLocaleString('en-IN')}</span>
+                        </div>
+                      </div>
+                    )}
                     
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4 pt-4 border-t border-slate-200">
                       <div>
