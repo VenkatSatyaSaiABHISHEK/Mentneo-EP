@@ -11,4 +11,5 @@ export interface Client {
   videos: string | number;
   paymentPhotoUrl?: string;
   clientDataUrl?: string;
+  pendingAmount?: number;
 }

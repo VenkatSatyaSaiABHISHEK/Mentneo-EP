@@ -39,6 +39,7 @@ export const getAllClients = async (): Promise<Client[]> => {
       videos: data.videos || '',
       paymentPhotoUrl: data.paymentPhotoUrl || '',
       clientDataUrl: data.clientDataUrl || '',
+      pendingAmount: Number(data.pendingAmount) || 0,
     } as Client
   })
 }

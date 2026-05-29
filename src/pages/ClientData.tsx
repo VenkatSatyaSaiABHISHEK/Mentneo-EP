@@ -3,8 +3,14 @@ import Papa from 'papaparse';
 import Button from '../components/Button';
 import Card from '../components/Card';
 import { Client, ClientStatus } from '../types/client';
-import { getAllClients, createClient, uploadClientFile } from '../services/clientService';
+import { getAllClients, createClient, uploadClientFile, updateClient } from '../services/clientService';
 import { useAuth } from '../context/AuthContext';
+
+const formatCurrency = new Intl.NumberFormat('en-IN', {
+  style: 'currency',
+  currency: 'INR',
+  maximumFractionDigits: 0,
+});
 
 export default function ClientData() {
   const { isSuperAdmin } = useAuth();
@@ -12,6 +18,13 @@ export default function ClientData() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Edit Client State
+  const [editingClient, setEditingClient] = useState<Client | null>(null);
+  const [editFormData, setEditFormData] = useState<Partial<Client>>({});
+  const [editPaymentPhoto, setEditPaymentPhoto] = useState<File | null>(null);
+  const [editClientDataFile, setEditClientDataFile] = useState<File | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
 
   useEffect(() => {
     fetchClients();
@@ -48,6 +61,9 @@ export default function ClientData() {
           if (statusStr.toLowerCase() === 'completed') statusStr = 'Completed';
           if (statusStr.toLowerCase() === 'pending') statusStr = 'Pending';
           
+          const pendingAmountStr = row['pending amount'] || row['pending'] || row['amount'] || '0';
+          const pendingAmount = Number(pendingAmountStr.replace(/[^0-9.-]/g, '')) || 0;
+
           return {
             clientName: row['client name'] || row['clientname'] || row['name'] || '',
             phoneNumber: row['phone number'] || row['phone'] || '',
@@ -56,6 +72,7 @@ export default function ClientData() {
             status: (['Pending', 'In Progress', 'Completed'].includes(statusStr) ? statusStr : 'Pending') as ClientStatus,
             selectedPackage: row['package'] || row['selected package'] || '',
             videos: row['videos'] || '',
+            pendingAmount: pendingAmount,
           };
         });
 
@@ -77,8 +94,8 @@ export default function ClientData() {
   };
 
   const handleDownloadTemplate = () => {
-    const headers = ["Client Name", "Phone", "Telecaller", "Editor", "Package", "Videos", "Status"];
-    const dummyData = ["John Doe", "1234567890", "Jane Smith", "Mike Johnson", "Premium Pack", "0/10", "Pending"];
+    const headers = ["Client Name", "Phone", "Telecaller", "Editor", "Package", "Videos", "Pending Amount", "Status"];
+    const dummyData = ["John Doe", "1234567890", "Jane Smith", "Mike Johnson", "Premium Pack", "0/10", "5000", "Pending"];
     const csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\n" + dummyData.join(",");
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
@@ -98,6 +115,7 @@ export default function ClientData() {
     status: 'Pending',
     selectedPackage: '',
     videos: '',
+    pendingAmount: 0,
   });
   const [paymentPhoto, setPaymentPhoto] = useState<File | null>(null);
   const [clientDataFile, setClientDataFile] = useState<File | null>(null);
@@ -106,6 +124,11 @@ export default function ClientData() {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setNewClient({ ...newClient, [name]: value });
+  };
+
+  const handleEditInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setEditFormData({ ...editFormData, [name]: value });
   };
 
   const handleAddClient = async (e: React.FormEvent) => {
@@ -124,6 +147,7 @@ export default function ClientData() {
 
       await createClient({
         ...(newClient as Omit<Client, 'id'>),
+        pendingAmount: Number(newClient.pendingAmount) || 0,
         paymentPhotoUrl,
         clientDataUrl,
       });
@@ -138,6 +162,7 @@ export default function ClientData() {
         status: 'Pending',
         selectedPackage: '',
         videos: '',
+        pendingAmount: 0,
       });
       setPaymentPhoto(null);
       setClientDataFile(null);
@@ -145,6 +170,39 @@ export default function ClientData() {
       console.error('Error adding client:', error);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleUpdateClient = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingClient) return;
+    setIsUpdating(true);
+    try {
+      let paymentPhotoUrl = editFormData.paymentPhotoUrl || '';
+      let clientDataUrl = editFormData.clientDataUrl || '';
+
+      if (editPaymentPhoto) {
+        paymentPhotoUrl = await uploadClientFile(editPaymentPhoto, 'payments');
+      }
+      if (editClientDataFile) {
+        clientDataUrl = await uploadClientFile(editClientDataFile, 'client-data');
+      }
+
+      await updateClient(editingClient.id, {
+        ...editFormData,
+        pendingAmount: Number(editFormData.pendingAmount) || 0,
+        paymentPhotoUrl,
+        clientDataUrl,
+      });
+
+      await fetchClients();
+      setEditingClient(null);
+      setEditPaymentPhoto(null);
+      setEditClientDataFile(null);
+    } catch (error) {
+      console.error('Error updating client:', error);
+    } finally {
+      setIsUpdating(false);
     }
   };
 
@@ -208,14 +266,16 @@ export default function ClientData() {
                 <th className="px-6 py-4 font-semibold">Editor</th>
                 <th className="px-6 py-4 font-semibold">Package</th>
                 <th className="px-6 py-4 font-semibold">Videos</th>
+                <th className="px-6 py-4 font-semibold">Pending Amount</th>
                 <th className="px-6 py-4 font-semibold">Attachments</th>
                 <th className="px-6 py-4 font-semibold text-center">Status</th>
+                {!isSuperAdmin && <th className="px-6 py-4 font-semibold text-center">Actions</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 bg-white">
               {isLoading ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-12 text-center text-slate-500">
+                  <td colSpan={isSuperAdmin ? 9 : 10} className="px-6 py-12 text-center text-slate-500">
                     Loading clients...
                   </td>
                 </tr>
@@ -231,6 +291,11 @@ export default function ClientData() {
                     </span>
                   </td>
                   <td className="px-6 py-4 text-slate-700 font-medium">{client.videos}</td>
+                  <td className="px-6 py-4 font-semibold text-slate-900">
+                    <span className={client.pendingAmount && client.pendingAmount > 0 ? "text-rose-600 font-bold" : "text-emerald-600"}>
+                      {formatCurrency.format(client.pendingAmount || 0)}
+                    </span>
+                  </td>
                   <td className="px-6 py-4">
                     <div className="flex flex-col gap-1">
                       {client.paymentPhotoUrl && (
@@ -251,11 +316,26 @@ export default function ClientData() {
                       </span>
                     </div>
                   </td>
+                  {!isSuperAdmin && (
+                    <td className="px-6 py-4 text-center">
+                      <button
+                        onClick={() => {
+                          setEditingClient(client);
+                          setEditFormData(client);
+                          setEditPaymentPhoto(null);
+                          setEditClientDataFile(null);
+                        }}
+                        className="rounded-full bg-slate-100 hover:bg-slate-200 px-3 py-1 text-xs font-semibold text-slate-700 transition"
+                      >
+                        Edit
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
               {!isLoading && clients.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-6 py-12 text-center text-slate-500">
+                  <td colSpan={isSuperAdmin ? 9 : 10} className="px-6 py-12 text-center text-slate-500">
                     No clients found. Click "Add New Client" or "Upload CSV" to get started.
                   </td>
                 </tr>
@@ -378,7 +458,20 @@ export default function ClientData() {
                   />
                 </div>
 
-                <div className="space-y-2 md:col-span-2">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">Pending Amount (INR)</label>
+                  <input
+                    type="number"
+                    name="pendingAmount"
+                    value={newClient.pendingAmount || ''}
+                    onChange={handleInputChange}
+                    className="w-full rounded-xl border-slate-200 border px-4 py-3 text-sm focus:border-blue-500 focus:ring-blue-500/20 transition-all outline-none"
+                    placeholder="e.g. 5000"
+                    min="0"
+                  />
+                </div>
+
+                <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-700">Status</label>
                   <select
                     name="status"
@@ -399,6 +492,176 @@ export default function ClientData() {
                 </Button>
                 <Button variant="primary" type="submit" disabled={isSubmitting}>
                   {isSubmitting ? 'Saving...' : 'Save Client'}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Client Modal */}
+      {editingClient && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm px-4 fade-in">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden border border-slate-200 animate-rise">
+            <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+              <div>
+                <h3 className="text-xl font-semibold text-slate-800">Edit Client: {editingClient.clientName}</h3>
+                <p className="text-sm text-slate-500 mt-1">Modify client details, files, and progress status.</p>
+              </div>
+              <button 
+                onClick={() => setEditingClient(null)}
+                className="text-slate-400 hover:text-slate-600 transition-colors p-2 rounded-full hover:bg-slate-200/50"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <form onSubmit={handleUpdateClient} className="p-8 max-h-[75vh] overflow-y-auto">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">Client Name</label>
+                  <input
+                    required
+                    type="text"
+                    name="clientName"
+                    value={editFormData.clientName || ''}
+                    onChange={handleEditInputChange}
+                    className="w-full rounded-xl border-slate-200 border px-4 py-3 text-sm focus:border-blue-500 focus:ring-blue-500/20 transition-all outline-none"
+                    placeholder="Enter client name"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">Phone Number</label>
+                  <input
+                    required
+                    type="text"
+                    name="phoneNumber"
+                    value={editFormData.phoneNumber || ''}
+                    onChange={handleEditInputChange}
+                    className="w-full rounded-xl border-slate-200 border px-4 py-3 text-sm focus:border-blue-500 focus:ring-blue-500/20 transition-all outline-none"
+                    placeholder="Enter phone number"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">Assigned Telecaller</label>
+                  <input
+                    required
+                    type="text"
+                    name="telecallerName"
+                    value={editFormData.telecallerName || ''}
+                    onChange={handleEditInputChange}
+                    className="w-full rounded-xl border-slate-200 border px-4 py-3 text-sm focus:border-blue-500 focus:ring-blue-500/20 transition-all outline-none"
+                    placeholder="Telecaller name"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">Assigned Editor</label>
+                  <input
+                    required
+                    type="text"
+                    name="editorName"
+                    value={editFormData.editorName || ''}
+                    onChange={handleEditInputChange}
+                    className="w-full rounded-xl border-slate-200 border px-4 py-3 text-sm focus:border-blue-500 focus:ring-blue-500/20 transition-all outline-none"
+                    placeholder="Editor name"
+                  />
+                </div>
+
+                <div className="space-y-2 md:col-span-2">
+                  <label className="text-sm font-medium text-slate-700">Package Details</label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <input
+                      required
+                      type="text"
+                      name="selectedPackage"
+                      value={editFormData.selectedPackage || ''}
+                      onChange={handleEditInputChange}
+                      className="w-full rounded-xl border-slate-200 border px-4 py-3 text-sm focus:border-blue-500 focus:ring-blue-500/20 transition-all outline-none"
+                      placeholder="e.g. Premium Reel Pack"
+                    />
+                    <input
+                      required
+                      type="text"
+                      name="videos"
+                      value={editFormData.videos || ''}
+                      onChange={handleEditInputChange}
+                      className="w-full rounded-xl border-slate-200 border px-4 py-3 text-sm focus:border-blue-500 focus:ring-blue-500/20 transition-all outline-none"
+                      placeholder="Video Count (e.g. 0/10)"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">Payment Photo</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setEditPaymentPhoto(e.target.files?.[0] || null)}
+                    className="w-full rounded-xl border-slate-200 border px-4 py-2 text-sm file:mr-4 file:py-1.5 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 transition-all outline-none"
+                  />
+                  {editFormData.paymentPhotoUrl && (
+                    <div className="text-xs text-slate-500 mt-1">
+                      Current payment photo exists:{' '}
+                      <a href={editFormData.paymentPhotoUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                        View file
+                      </a>
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">Client Data (Files)</label>
+                  <input
+                    type="file"
+                    onChange={(e) => setEditClientDataFile(e.target.files?.[0] || null)}
+                    className="w-full rounded-xl border-slate-200 border px-4 py-2 text-sm file:mr-4 file:py-1.5 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 transition-all outline-none"
+                  />
+                  {editFormData.clientDataUrl && (
+                    <div className="text-xs text-slate-500 mt-1">
+                      Current client data exists:{' '}
+                      <a href={editFormData.clientDataUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                        View file
+                      </a>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">Pending Amount (INR)</label>
+                  <input
+                    type="number"
+                    name="pendingAmount"
+                    value={editFormData.pendingAmount === undefined ? '' : editFormData.pendingAmount}
+                    onChange={handleEditInputChange}
+                    className="w-full rounded-xl border-slate-200 border px-4 py-3 text-sm focus:border-blue-500 focus:ring-blue-500/20 transition-all outline-none"
+                    placeholder="e.g. 5000"
+                    min="0"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">Status</label>
+                  <select
+                    name="status"
+                    value={editFormData.status || 'Pending'}
+                    onChange={handleEditInputChange}
+                    className="w-full rounded-xl border-slate-200 border px-4 py-3 text-sm focus:border-blue-500 focus:ring-blue-500/20 transition-all outline-none bg-white"
+                  >
+                    <option value="Pending">Pending</option>
+                    <option value="In Progress">In Progress</option>
+                    <option value="Completed">Completed</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="mt-8 flex justify-end gap-3 pt-6 border-t border-slate-100">
+                <Button variant="outline" type="button" onClick={() => setEditingClient(null)}>
+                  Cancel
+                </Button>
+                <Button variant="primary" type="submit" disabled={isUpdating}>
+                  {isUpdating ? 'Saving...' : 'Save Changes'}
                 </Button>
               </div>
             </form>
