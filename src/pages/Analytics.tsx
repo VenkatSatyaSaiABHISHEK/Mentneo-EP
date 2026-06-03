@@ -26,6 +26,7 @@ export default function Analytics() {
   const [showGuide, setShowGuide] = useState(false)
   const [showVisualsModal, setShowVisualsModal] = useState(false)
   const [totalClientPending, setTotalClientPending] = useState(0)
+  const [selectedMonth, setSelectedMonth] = useState(() => new Date().toISOString().substring(0, 7))
 
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
@@ -206,7 +207,7 @@ export default function Analytics() {
   }
 
   const exportToCSV = () => {
-    const csvData = data.map(d => ({
+    const csvData = currentMonthData.map(d => ({
       Date: d.date,
       Revenue: d.revenue,
       'Total Payout': d.payout,
@@ -265,14 +266,16 @@ export default function Analytics() {
     html2pdf().set(opt).from(element).save()
   }
 
-  const totalRevenue = data.reduce((acc, curr) => acc + curr.revenue, 0)
-  const totalPayouts = data.reduce((acc, curr) => acc + curr.payout, 0)
-  const totalDeductions = data.reduce((acc, curr) => acc + curr.deductions, 0)
-  const totalExpenses = data.reduce((acc, curr) => acc + curr.otherExpenses, 0)
+  const currentMonthData = data.filter(d => d.date.startsWith(selectedMonth))
+
+  const totalRevenue = currentMonthData.reduce((acc, curr) => acc + curr.revenue, 0)
+  const totalPayouts = currentMonthData.reduce((acc, curr) => acc + curr.payout, 0)
+  const totalDeductions = currentMonthData.reduce((acc, curr) => acc + curr.deductions, 0)
+  const totalExpenses = currentMonthData.reduce((acc, curr) => acc + curr.otherExpenses, 0)
   const netSavings = totalRevenue - (totalPayouts - totalDeductions) - totalExpenses
   const profitMargin = totalRevenue > 0 ? ((netSavings / totalRevenue) * 100).toFixed(1) : '0'
 
-  const chartData = data.map(d => ({
+  const chartData = currentMonthData.map(d => ({
     name: new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' }),
     Revenue: d.revenue,
     Expenses: d.payout + d.otherExpenses - d.deductions,
@@ -290,7 +293,7 @@ export default function Analytics() {
   ].filter(item => item.value > 0);
 
   // Department Payouts Chart Data
-  const deptPayoutsData = data.map(d => ({
+  const deptPayoutsData = currentMonthData.map(d => ({
     name: new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
     Engineering: d.departmentPayouts.engineering || 0,
     Sales: d.departmentPayouts.sales || 0,
@@ -318,8 +321,19 @@ export default function Analytics() {
           </p>
         </div>
         
-        {!isSuperAdmin && (
-          <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-col items-start md:items-end gap-4">
+          <div className="flex items-center gap-2 rounded-full bg-white px-4 py-2.5 ring-1 ring-slate-200 shadow-sm transition-all hover:shadow-md">
+            <span className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Filter Month:</span>
+            <input 
+              type="month" 
+              className="border-none bg-transparent text-sm font-bold text-slate-700 outline-none cursor-pointer"
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+            />
+          </div>
+          
+          {!isSuperAdmin && (
+            <div className="flex flex-wrap items-center gap-3">
             <button onClick={() => setShowGuide(true)} className="group flex items-center gap-2 rounded-full bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200 transition-all hover:bg-slate-50 hover:shadow-md">
               <Icons.Info />
               How it Works
@@ -345,8 +359,9 @@ export default function Analytics() {
             <button onClick={exportToPDF} className="group flex items-center gap-2 rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-500/30 transition-all hover:shadow-blue-500/50 hover:-translate-y-0.5">
               Download PDF
             </button>
-          </div>
-        )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* KPI Cards */}
@@ -363,7 +378,7 @@ export default function Analytics() {
           <h3 className="relative z-10 mt-4 text-3xl font-bold tracking-tight">
             {isLoading ? '...' : `₹${totalRevenue.toLocaleString('en-IN')}`}
           </h3>
-          <p className="relative z-10 mt-1 text-sm text-blue-100 opacity-90">All time gross income</p>
+          <p className="relative z-10 mt-1 text-sm text-blue-100 opacity-90">Gross income for selected month</p>
         </div>
 
         {/* Card 2: Payouts */}
@@ -378,7 +393,7 @@ export default function Analytics() {
           <h3 className="relative z-10 mt-4 text-3xl font-bold tracking-tight">
             {isLoading ? '...' : `₹${totalPayouts.toLocaleString('en-IN')}`}
           </h3>
-          <p className="relative z-10 mt-1 text-sm text-orange-100 opacity-90">Total salaries dispatched</p>
+          <p className="relative z-10 mt-1 text-sm text-orange-100 opacity-90">Salaries for selected month</p>
         </div>
 
         {/* Card 3: Deductions */}
@@ -393,7 +408,7 @@ export default function Analytics() {
           <h3 className="relative z-10 mt-4 text-3xl font-bold tracking-tight">
             {isLoading ? '...' : `₹${totalDeductions.toLocaleString('en-IN')}`}
           </h3>
-          <p className="relative z-10 mt-1 text-sm text-purple-100 opacity-90">Recovered amounts</p>
+          <p className="relative z-10 mt-1 text-sm text-purple-100 opacity-90">Recovered for selected month</p>
         </div>
 
         {/* Card 4: Profit */}
@@ -555,7 +570,7 @@ export default function Analytics() {
               </div>
               
               <div className="h-[250px] w-full">
-                {data.length > 0 ? (
+                {currentMonthData.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                       <defs>
@@ -598,7 +613,7 @@ export default function Analytics() {
               </div>
               
               <div className="h-[250px] w-full">
-                {data.length > 0 && pieData.length > 0 ? (
+                {currentMonthData.length > 0 && pieData.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
@@ -645,7 +660,7 @@ export default function Analytics() {
                 </div>
                 
                 <div className="h-[250px] w-full mt-4">
-                  {data.length > 0 ? (
+                  {currentMonthData.length > 0 ? (
                     <ResponsiveContainer width="100%" height="100%">
                       <ComposedChart data={deptPayoutsData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
@@ -697,14 +712,14 @@ export default function Analytics() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {data.length === 0 ? (
+                  {currentMonthData.length === 0 ? (
                     <tr>
                       <td colSpan={7} className="px-6 py-12 text-center text-slate-400">
-                        {isLoading ? 'Loading records...' : 'No records found. Data is safely stored in Firebase once logged.'}
+                        {isLoading ? 'Loading records...' : 'No records found for the selected month.'}
                       </td>
                     </tr>
                   ) : (
-                    data.map((row) => {
+                    currentMonthData.map((row) => {
                       const safe = row.revenue - (row.payout - row.deductions) - row.otherExpenses;
                       const isProfit = safe >= 0;
                       
