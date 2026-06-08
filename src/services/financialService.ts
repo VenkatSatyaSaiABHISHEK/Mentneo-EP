@@ -16,6 +16,7 @@ export interface FinancialData {
     hrAdmin: number;
     other: number;
   };
+  pendingAmount?: number;
   createdAt: number;
 }
 

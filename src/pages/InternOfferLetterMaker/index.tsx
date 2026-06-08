@@ -3,17 +3,17 @@ import html2pdf from 'html2pdf.js';
 import Papa from 'papaparse';
 import { collection, addDoc, serverTimestamp, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../services/firebase';
-import { OfferLetterData, initialOfferLetterData } from './types';
+import { InternOfferLetterData, initialInternOfferLetterData } from './types';
 import OfferLetterTemplate from './OfferLetterTemplate';
 
-export default function OfferLetterMaker() {
-  const [data, setData] = useState<OfferLetterData>(initialOfferLetterData);
+export default function InternOfferLetterMaker() {
+  const [data, setData] = useState<InternOfferLetterData>(initialInternOfferLetterData);
   const [isSaving, setIsSaving] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
   const [drafts, setDrafts] = useState<{id: string, name: string, date: string}[]>([]);
   const [previewMode, setPreviewMode] = useState(false);
-  const [bulkData, setBulkData] = useState<OfferLetterData[]>([]);
+  const [bulkData, setBulkData] = useState<InternOfferLetterData[]>([]);
   
   const templateRef = useRef<HTMLDivElement>(null);
 
@@ -94,16 +94,14 @@ export default function OfferLetterMaker() {
 
   const handleDownloadTemplate = () => {
     const headers = [
-      'candidateName', 'address', 'date', 'position', 'department', 
-      'employmentType', 'workLocation', 'reportingTo', 'startDate', 
-      'salary', 'emailId', 'phoneNumber', 
-      'website', 'templateId'
+      'candidateName', 'date', 'position', 'department', 
+      'employmentType', 'reportingTo', 'startDate', 
+      'internEmail', 'templateId'
     ];
     const sampleData = [
-      'John Doe', 'New York, USA', '2023-10-01', 'Software Engineer', 'Engineering',
-      'Full-Time', 'Remote', 'Jane Smith', '2023-11-01',
-      '50000', 'john@example.com', '+1 234 567 8900',
-      'www.johndoe.com', '1'
+      'John Doe', '2023-10-01', 'Intern', 'Engineering',
+      'Internship', 'Jane Smith', '2023-11-01',
+      'john@example.com', '1'
     ];
     
     const csvContent = headers.join(',') + '\n' + sampleData.join(',');
@@ -127,20 +125,15 @@ export default function OfferLetterMaker() {
       skipEmptyLines: true,
       complete: (results) => {
         const parsedData = results.data as any[];
-        const mappedData: OfferLetterData[] = parsedData.map(row => ({
+        const mappedData: InternOfferLetterData[] = parsedData.map(row => ({
           candidateName: row.candidateName || '',
-          address: row.address || '',
           date: row.date || '',
           position: row.position || '',
           department: row.department || '',
           employmentType: row.employmentType || '',
-          workLocation: row.workLocation || '',
           reportingTo: row.reportingTo || '',
           startDate: row.startDate || '',
-          salary: row.salary || '',
-          emailId: row.emailId || '',
-          phoneNumber: row.phoneNumber || '',
-          website: row.website || '',
+          internEmail: row.internEmail || '',
           templateId: row.templateId || '1'
         }));
         setBulkData(mappedData);
@@ -195,7 +188,7 @@ export default function OfferLetterMaker() {
       const querySnapshot = await getDocs(collection(db, 'offerLetters'));
       const selectedDoc = querySnapshot.docs.find(doc => doc.id === id);
       if (selectedDoc) {
-        setData({ id: selectedDoc.id, ...selectedDoc.data() } as OfferLetterData);
+        setData({ id: selectedDoc.id, ...selectedDoc.data() } as InternOfferLetterData);
       }
     } catch (error) {
       console.error("Error loading draft:", error);
@@ -206,7 +199,7 @@ export default function OfferLetterMaker() {
     <div className="flex flex-col h-[calc(100vh-8rem)]">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Offer Letter Maker <span className="ml-2 inline-flex items-center rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-semibold text-purple-800">Beta</span></h1>
+          <h1 className="text-2xl font-bold text-slate-900">Intern Offer Letter Maker <span className="ml-2 inline-flex items-center rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-semibold text-purple-800">Beta</span></h1>
           <p className="text-slate-500">Create, edit, and generate PDF offer letters.</p>
         </div>
         <div className="flex gap-3">
@@ -338,31 +331,19 @@ export default function OfferLetterMaker() {
               
               <div className="grid grid-cols-1 gap-4">
                 <InputField label="Candidate Name" name="candidateName" value={data.candidateName} onChange={handleInputChange} />
-                <InputField label="Address (City, Country)" name="address" value={data.address} onChange={handleInputChange} />
                 <InputField label="Date" name="date" type="date" value={data.date} onChange={handleInputChange} />
                 <InputField label="Position" name="position" value={data.position} onChange={handleInputChange} />
                 <InputField label="Department" name="department" value={data.department} onChange={handleInputChange} />
                 <InputField label="Employment Type" name="employmentType" value={data.employmentType} onChange={handleInputChange} />
-                <InputField label="Work Location" name="workLocation" value={data.workLocation} onChange={handleInputChange} />
                 <InputField label="Reporting To" name="reportingTo" value={data.reportingTo} onChange={handleInputChange} />
                 <InputField label="Start Date" name="startDate" type="date" value={data.startDate} onChange={handleInputChange} />
-                <InputField label="Monthly Stipend" name="salary" value={data.salary} onChange={handleInputChange} />
+                <InputField label="Intern Email" name="internEmail" type="email" value={data.internEmail} onChange={handleInputChange} />
               </div>
             </div>
 
             {/* Page 2 Details */}
             <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm flex flex-col gap-4">
-              <h3 className="text-lg font-semibold text-slate-800">Page 2: Contact Info</h3>
-              <div className="grid grid-cols-1 gap-4">
-                <InputField label="Email ID" name="emailId" type="email" value={data.emailId} onChange={handleInputChange} />
-                <InputField label="Phone Number" name="phoneNumber" value={data.phoneNumber} onChange={handleInputChange} />
-                <InputField label="Website (Optional)" name="website" value={data.website} onChange={handleInputChange} />
-              </div>
-            </div>
-
-            {/* Page 3 Details */}
-            <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm flex flex-col gap-4">
-              <h3 className="text-lg font-semibold text-slate-800">Page 3: Acceptance</h3>
+              <h3 className="text-lg font-semibold text-slate-800">Page 2: Acceptance</h3>
               <div className="grid grid-cols-1 gap-4">
                 <div className="p-3 bg-blue-50 rounded-lg text-sm text-blue-800 border border-blue-100">
                   <strong>Note:</strong> Signature Section is permanently set to HR Name: N. Sri Venkata Lalitha Jyothika, Role: HR Manager.

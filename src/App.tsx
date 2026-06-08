@@ -11,6 +11,7 @@ import Login from './pages/Login'
 import Profile from './pages/Profile'
 import Tasks from './pages/Tasks'
 import OfferLetterMaker from './pages/OfferLetterMaker'
+import InternOfferLetterMaker from './pages/InternOfferLetterMaker'
 import ClientData from './pages/ClientData'
 import Analytics from './pages/Analytics'
 
@@ -43,6 +44,7 @@ function App() {
           <Route path="/tasks" element={<Tasks />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/offer-letters" element={<OfferLetterMaker />} />
+          <Route path="/intern-offer-letters" element={<InternOfferLetterMaker />} />
           <Route path="/client-data" element={<ClientData />} />
           <Route path="/analytics" element={<Analytics />} />
         </Route>

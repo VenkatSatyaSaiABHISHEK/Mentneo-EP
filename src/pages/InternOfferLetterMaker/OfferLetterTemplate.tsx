@@ -1,9 +1,9 @@
 import React from 'react';
 import './OfferLetterTemplate.css';
-import { OfferLetterData } from './types';
+import { InternOfferLetterData } from './types';
 
 interface OfferLetterTemplateProps {
-  data: OfferLetterData;
+  data: InternOfferLetterData;
   templateRef: React.RefObject<HTMLDivElement>;
 }
 
@@ -70,14 +70,6 @@ export default function OfferLetterTemplate({ data, templateRef }: OfferLetterTe
     }
   };
 
-  const formatCurrency = (amount: string) => {
-    if (!amount) return '';
-    const numericString = amount.replace(/[^0-9.]/g, '');
-    if (!numericString) return amount.replace(/^₹\s*/, '');
-    const number = parseFloat(numericString);
-    if (isNaN(number)) return amount.replace(/^₹\s*/, '');
-    return new Intl.NumberFormat('en-IN').format(number);
-  };
 
   return (
     <div ref={templateRef} className="offer-letter-container">
@@ -100,7 +92,7 @@ export default function OfferLetterTemplate({ data, templateRef }: OfferLetterTe
           <p>
             To,<br />
             <span className="text-bold">{data.candidateName || 'Candidate Name'}</span><br />
-            {data.address || 'Location'}
+            {data.internEmail && <span style={{ color: '#64748b', fontSize: '13px' }}>{data.internEmail}</span>}
           </p>
         </div>
 
@@ -133,11 +125,6 @@ export default function OfferLetterTemplate({ data, templateRef }: OfferLetterTe
               <td>{data.employmentType}</td>
             </tr>
             <tr>
-              <td className="label">Work Location</td>
-              <td className="colon">:</td>
-              <td>{data.workLocation}</td>
-            </tr>
-            <tr>
               <td className="label">Reporting To</td>
               <td className="colon">:</td>
               <td>{data.reportingTo}</td>
@@ -151,31 +138,7 @@ export default function OfferLetterTemplate({ data, templateRef }: OfferLetterTe
           </tbody>
         </table>
 
-        <h2 className="section-title">2. COMPENSATION DETAILS</h2>
-        <table className="comp-table">
-          <thead>
-            <tr>
-              <th>COMPONENT</th>
-              <th>AMOUNT (INR)</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>Monthly Stipend</td>
-              <td>₹ {formatCurrency(data.salary)}</td>
-            </tr>
-            <tr>
-              <td>Payment Frequency</td>
-              <td>Monthly</td>
-            </tr>
-            <tr>
-              <td>Pre-Placement Offer (PPO)</td>
-              <td>Based on performance during internship</td>
-            </tr>
-          </tbody>
-        </table>
-
-        <div className="highlight-box">
+        <div className="highlight-box" style={{ marginTop: '30px' }}>
           <div className="icon"><Icons.CalendarCheck /></div>
           <div className="content">
             <h4>ACCEPTANCE</h4>
@@ -197,7 +160,7 @@ export default function OfferLetterTemplate({ data, templateRef }: OfferLetterTe
           </div>
         </div>
 
-        <h2 className="section-title">3. TERMS AND CONDITIONS OF EMPLOYMENT</h2>
+        <h2 className="section-title">2. TERMS AND CONDITIONS OF EMPLOYMENT</h2>
         <p className="text-body" style={{ marginTop: '15px' }}>Your employment with Mentneo is subject to the following terms and conditions:</p>
 
         <div className="terms-list">
@@ -266,7 +229,7 @@ export default function OfferLetterTemplate({ data, templateRef }: OfferLetterTe
           </div>
         </div>
 
-        <h2 className="section-title">4. GENERAL</h2>
+        <h2 className="section-title">3. GENERAL</h2>
         <p className="text-body" style={{ marginTop: '15px' }}>This offer is subject to verification of your background, qualifications, and references. Any misrepresentation of facts may result in withdrawal of this offer or termination of employment.</p>
 
         <div className="bottom-split-box">
@@ -281,9 +244,9 @@ export default function OfferLetterTemplate({ data, templateRef }: OfferLetterTe
             </div>
           </div>
           <div className="bottom-split-right">
-            <div className="contact-row"><Icons.Mail /> {data.emailId || 'official@mentneo.com'}</div>
-            <div className="contact-row"><Icons.Globe /> {data.website || 'www.mentneo.com'}</div>
-            <div className="contact-row"><Icons.Phone /> {data.phoneNumber || '+91 9182146476'}</div>
+            <div className="contact-row"><Icons.Mail /> official@mentneo.com</div>
+            <div className="contact-row"><Icons.Globe /> www.mentneo.com</div>
+            <div className="contact-row"><Icons.Phone /> +91 9182146476</div>
           </div>
         </div>
       </div>
@@ -301,7 +264,7 @@ export default function OfferLetterTemplate({ data, templateRef }: OfferLetterTe
           </div>
         </div>
 
-        <h2 className="section-title">5. ACKNOWLEDGEMENT & ACCEPTANCE</h2>
+        <h2 className="section-title">4. ACKNOWLEDGEMENT & ACCEPTANCE</h2>
         <p className="text-body" style={{ marginTop: '20px' }}>
           Please read this offer letter carefully along with all the terms and conditions stated herein. If you accept this offer and the terms of employment, please sign and return a copy of this letter to indicate your acceptance.
         </p>

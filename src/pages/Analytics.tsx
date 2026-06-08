@@ -5,7 +5,8 @@ import Papa from 'papaparse'
 // @ts-ignore
 import html2pdf from 'html2pdf.js'
 import { useAuth } from '../context/AuthContext'
-import { getAllClients } from '../services/clientService'
+import { getAllClients, updateClient } from '../services/clientService'
+import type { Client } from '../types/client'
 
 // Simple elegant SVG Icons
 const Icons = {
@@ -27,12 +28,18 @@ export default function Analytics() {
   const [showVisualsModal, setShowVisualsModal] = useState(false)
   const [totalClientPending, setTotalClientPending] = useState(0)
   const [selectedMonth, setSelectedMonth] = useState(() => new Date().toISOString().substring(0, 7))
+  const [showPendingModal, setShowPendingModal] = useState(false)
+  const [pendingClients, setPendingClients] = useState<Client[]>([])
+  const [paymentInputs, setPaymentInputs] = useState<Record<string, number>>({})
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
 
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
     revenue: 0,
     deductions: 0,
     otherExpenses: 0,
+    pendingAmount: 0,
+    payout: 0,
     departmentPayouts: {
       engineering: 0,
       sales: 0,
@@ -53,6 +60,7 @@ export default function Analytics() {
         const fetchedClients = await getAllClients()
         const pendingSum = fetchedClients.reduce((sum, client) => sum + (Number(client.pendingAmount) || 0), 0)
         setTotalClientPending(pendingSum)
+        setPendingClients(fetchedClients.filter(c => (Number(c.pendingAmount) || 0) > 0))
         
         // Auto-load today's data if it exists
         const today = new Date().toISOString().split('T')[0]
@@ -63,6 +71,8 @@ export default function Analytics() {
             revenue: existingRecord.revenue,
             deductions: existingRecord.deductions,
             otherExpenses: existingRecord.otherExpenses,
+            pendingAmount: existingRecord.pendingAmount || 0,
+            payout: existingRecord.payout || 0,
             departmentPayouts: existingRecord.departmentPayouts
           })
         }
@@ -77,11 +87,21 @@ export default function Analytics() {
 
   const [isSaving, setIsSaving] = useState(false)
 
+  const toggleRow = (id: string) => {
+    setExpandedRows(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSaving(true)
     try {
       const totalPayout = Object.values(formData.departmentPayouts).reduce((a, b) => a + b, 0)
+      
       const recordId = formData.date
       
       const existing = data.find(d => d.id === recordId)
@@ -93,7 +113,8 @@ export default function Analytics() {
         deductions: formData.deductions,
         otherExpenses: formData.otherExpenses,
         payout: totalPayout,
-        departmentPayouts: formData.departmentPayouts,
+        pendingAmount: formData.pendingAmount,
+        departmentPayouts: existing ? existing.departmentPayouts : formData.departmentPayouts,
         createdAt: existing ? existing.createdAt : Date.now()
       }
       
@@ -120,6 +141,8 @@ export default function Analytics() {
         revenue: existingRecord.revenue,
         deductions: existingRecord.deductions,
         otherExpenses: existingRecord.otherExpenses,
+        pendingAmount: existingRecord.pendingAmount || 0,
+        payout: existingRecord.payout || 0,
         departmentPayouts: existingRecord.departmentPayouts
       })
     } else {
@@ -128,6 +151,8 @@ export default function Analytics() {
         revenue: 0,
         deductions: 0,
         otherExpenses: 0,
+        pendingAmount: 0,
+        payout: 0,
         departmentPayouts: { engineering: 0, sales: 0, marketing: 0, hrAdmin: 0, other: 0 }
       })
     }
@@ -162,8 +187,9 @@ export default function Analytics() {
           const marketing = parseFloat(row['Mktg Payout']) || parseFloat(row['Marketing Payout']) || 0
           const hrAdmin = parseFloat(row['HR Payout']) || parseFloat(row['HR/Admin Payout']) || 0
           const other = parseFloat(row['Other Payout']) || 0
+          const pendingAmount = parseFloat(row['Pending Amount']) || 0
           
-          const totalPayout = engineering + sales + marketing + hrAdmin + other
+          const totalPayout = parseFloat(row['Total Payout']) || (engineering + sales + marketing + hrAdmin + other)
           
           const monthStr = row['Date'] || ''
           const dateStr = monthStr || new Date().toISOString().split('T')[0]
@@ -175,6 +201,7 @@ export default function Analytics() {
             deductions: parseFloat(row['Deductions']) || 0,
             otherExpenses: parseFloat(row['Other Expenses']) || 0,
             payout: totalPayout,
+            pendingAmount: pendingAmount,
             departmentPayouts: { engineering, sales, marketing, hrAdmin, other },
             createdAt: Date.now()
           }
@@ -190,11 +217,13 @@ export default function Analytics() {
     const templateData = [{
       Date: '2026-01-01',
       Revenue: 500000,
-      'Eng Payout': 150000,
-      'Sales Payout': 80000,
-      'Marketing Payout': 40000,
-      'HR/Admin Payout': 30000,
+      'Total Payout': 150000,
+      'Eng Payout': 60000,
+      'Sales Payout': 40000,
+      'Marketing Payout': 20000,
+      'HR/Admin Payout': 20000,
       'Other Payout': 10000,
+      'Pending Amount': 50000,
       Deductions: 5000,
       'Other Expenses': 20000
     }]
@@ -211,11 +240,12 @@ export default function Analytics() {
       Date: d.date,
       Revenue: d.revenue,
       'Total Payout': d.payout,
-      'Eng Payout': d.departmentPayouts.engineering,
-      'Sales Payout': d.departmentPayouts.sales,
-      'Marketing Payout': d.departmentPayouts.marketing,
-      'HR/Admin Payout': d.departmentPayouts.hrAdmin,
-      'Other Payout': d.departmentPayouts.other,
+      'Eng Payout': d.departmentPayouts?.engineering || 0,
+      'Sales Payout': d.departmentPayouts?.sales || 0,
+      'Marketing Payout': d.departmentPayouts?.marketing || 0,
+      'HR/Admin Payout': d.departmentPayouts?.hrAdmin || 0,
+      'Other Payout': d.departmentPayouts?.other || 0,
+      'Pending Amount': d.pendingAmount || 0,
       Deductions: d.deductions,
       'Other Expenses': d.otherExpenses,
       'Net Profit/Safe': d.revenue - (d.payout - d.deductions) - d.otherExpenses
@@ -231,9 +261,9 @@ export default function Analytics() {
   const loadDemoData = async () => {
     setIsLoading(true);
     const demoData = [
-      { date: '2026-01-01', revenue: 500000, payout: 150000, deductions: 5000, otherExpenses: 20000, eng: 40000, sales: 50000, mktg: 30000, hr: 20000, other: 10000 },
-      { date: '2026-01-02', revenue: 550000, payout: 160000, deductions: 8000, otherExpenses: 25000, eng: 45000, sales: 55000, mktg: 30000, hr: 20000, other: 10000 },
-      { date: '2026-01-03', revenue: 480000, payout: 160000, deductions: 4000, otherExpenses: 20000, eng: 45000, sales: 55000, mktg: 30000, hr: 20000, other: 10000 },
+      { date: '2026-01-01', revenue: 500000, payout: 150000, deductions: 5000, otherExpenses: 20000, eng: 40000, sales: 50000, mktg: 30000, hr: 20000, other: 10000, pendingAmount: 50000 },
+      { date: '2026-01-02', revenue: 550000, payout: 160000, deductions: 8000, otherExpenses: 25000, eng: 45000, sales: 55000, mktg: 30000, hr: 20000, other: 10000, pendingAmount: 45000 },
+      { date: '2026-01-03', revenue: 480000, payout: 160000, deductions: 4000, otherExpenses: 20000, eng: 45000, sales: 55000, mktg: 30000, hr: 20000, other: 10000, pendingAmount: 60000 },
     ];
     for (const d of demoData) {
       const newData: FinancialData = {
@@ -243,6 +273,7 @@ export default function Analytics() {
         deductions: d.deductions,
         otherExpenses: d.otherExpenses,
         payout: d.payout,
+        pendingAmount: d.pendingAmount,
         departmentPayouts: { engineering: d.eng, sales: d.sales, marketing: d.mktg, hrAdmin: d.hr, other: d.other },
         createdAt: Date.now()
       };
@@ -295,11 +326,11 @@ export default function Analytics() {
   // Department Payouts Chart Data
   const deptPayoutsData = currentMonthData.map(d => ({
     name: new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-    Engineering: d.departmentPayouts.engineering || 0,
-    Sales: d.departmentPayouts.sales || 0,
-    Marketing: d.departmentPayouts.marketing || 0,
-    HR_Admin: d.departmentPayouts.hrAdmin || 0,
-    Other: d.departmentPayouts.other || 0,
+    Engineering: d.departmentPayouts?.engineering || 0,
+    Sales: d.departmentPayouts?.sales || 0,
+    Marketing: d.departmentPayouts?.marketing || 0,
+    HR_Admin: d.departmentPayouts?.hrAdmin || 0,
+    Other: d.departmentPayouts?.other || 0,
   }))
 
   return (
@@ -385,8 +416,8 @@ export default function Analytics() {
         <div className="group relative overflow-hidden rounded-3xl bg-gradient-to-br from-orange-400 to-rose-500 p-6 text-white shadow-xl shadow-orange-500/20 transition-all hover:-translate-y-1 hover:shadow-orange-500/40">
           <div className="absolute -right-6 -top-6 h-32 w-32 rounded-full bg-white/10 blur-2xl transition-transform group-hover:scale-150"></div>
           <div className="relative z-10 flex items-center justify-between">
-            <p className="text-xs font-semibold uppercase tracking-wider text-orange-100">Employee Payouts</p>
-            <div className="rounded-xl bg-white/20 p-2 backdrop-blur-md">
+            <p className="text-xs font-semibold uppercase tracking-wider text-orange-100">Payout</p>
+            <div className="rounded-2xl bg-white/20 p-3 backdrop-blur-md">
               <Icons.Users />
             </div>
           </div>
@@ -430,7 +461,10 @@ export default function Analytics() {
         </div>
 
         {/* Card 5: Pending Collections */}
-        <div className="group relative overflow-hidden rounded-3xl bg-gradient-to-br from-amber-500 to-orange-600 p-6 text-white shadow-xl shadow-amber-500/20 transition-all hover:-translate-y-1 hover:shadow-amber-500/40">
+        <div 
+          onClick={() => setShowPendingModal(true)}
+          className="group relative overflow-hidden rounded-3xl bg-gradient-to-br from-amber-500 to-orange-600 p-6 text-white shadow-xl shadow-amber-500/20 transition-all hover:-translate-y-1 hover:shadow-amber-500/40 cursor-pointer"
+        >
           <div className="absolute -right-6 -top-6 h-32 w-32 rounded-full bg-white/10 blur-2xl transition-transform group-hover:scale-150"></div>
           <div className="relative z-10 flex items-center justify-between">
             <p className="text-xs font-semibold uppercase tracking-wider text-amber-100">Pending Collections</p>
@@ -482,34 +516,51 @@ export default function Analytics() {
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <label className="mb-4 block text-xs font-bold uppercase tracking-wider text-slate-500">Department Payouts</label>
+              <div className="rounded-2xl border border-slate-200/60 bg-white/40 p-5 shadow-sm">
+                <p className="mb-4 text-xs font-bold uppercase tracking-wider text-slate-500">Department Payouts</p>
                 <div className="space-y-3">
                   {[
-                    { key: 'engineering', label: 'Engineering' },
-                    { key: 'sales', label: 'Sales' },
-                    { key: 'marketing', label: 'Marketing' },
-                    { key: 'hrAdmin', label: 'HR & Admin' },
-                    { key: 'other', label: 'Other' }
-                  ].map(dept => (
-                    <div key={dept.key} className="flex items-center justify-between group">
-                      <span className="text-sm font-medium text-slate-600 group-hover:text-slate-900 transition-colors">{dept.label}</span>
-                      <div className="relative w-28">
+                    { id: 'engineering', label: 'Engineering' },
+                    { id: 'sales', label: 'Sales' },
+                    { id: 'marketing', label: 'Marketing' },
+                    { id: 'hrAdmin', label: 'HR & Admin' },
+                    { id: 'other', label: 'Other' },
+                  ].map((dept) => (
+                    <div key={dept.id} className="flex items-center justify-between gap-4">
+                      <label className="text-sm font-semibold text-slate-600 min-w-[100px]">{dept.label}</label>
+                      <div className="relative w-32">
                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400">₹</span>
                         <input 
                           type="number" 
-                          className="w-full rounded-lg border-0 bg-white py-1.5 pl-6 pr-2 text-right text-sm text-slate-900 shadow-sm ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-inset focus:ring-blue-500 outline-none transition-shadow"
-                          value={formData.departmentPayouts[dept.key as keyof typeof formData.departmentPayouts] || ''} 
-                          onChange={e => handleDepartmentChange(dept.key as any, e.target.value)} 
+                          className="w-full rounded-lg border-0 bg-white py-2 pl-7 pr-3 text-sm text-slate-900 shadow-sm ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-inset focus:ring-blue-500 outline-none transition-all"
+                          value={formData.departmentPayouts[dept.id as keyof typeof formData.departmentPayouts] || ''}
+                          onChange={e => handleDepartmentChange(dept.id as keyof typeof formData.departmentPayouts, e.target.value)}
                         />
                       </div>
                     </div>
                   ))}
                   
-                  <div className="mt-4 flex items-center justify-between border-t border-slate-200 pt-3">
+                  <div className="mt-5 border-t border-slate-200/60 pt-4 flex items-center justify-between">
                     <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Total Payout</span>
-                    <span className="text-sm font-bold text-slate-900 bg-orange-100 text-orange-700 px-2 py-0.5 rounded-md">₹{calcPayout.toLocaleString('en-IN')}</span>
+                    <span className="rounded-md bg-orange-100/80 px-3 py-1 text-sm font-bold text-slate-900">
+                      ₹{calcPayout.toLocaleString('en-IN')}
+                    </span>
                   </div>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-slate-500">
+                  Pending Amount (₹)
+                </label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-semibold text-slate-400">₹</span>
+                  <input 
+                    type="number" 
+                    className="w-full rounded-xl border-0 bg-slate-100/50 py-3 pl-8 pr-4 text-sm text-slate-900 shadow-inner ring-1 ring-inset ring-slate-200 focus:bg-white focus:ring-2 focus:ring-inset focus:ring-blue-500 transition-all outline-none"
+                    value={formData.pendingAmount || ''}
+                    onChange={e => setFormData({...formData, pendingAmount: parseFloat(e.target.value) || 0})}
+                  />
                 </div>
               </div>
 
@@ -705,7 +756,7 @@ export default function Analytics() {
                     <th className="px-6 py-4">Period</th>
                     <th className="px-6 py-4">Revenue</th>
                     <th className="px-6 py-4">Total Payout</th>
-                    <th className="px-6 py-4 hidden 2xl:table-cell">Dept Breakdown</th>
+                    <th className="px-6 py-4">Pending Amount</th>
                     <th className="px-6 py-4">Cuts/Exp</th>
                     <th className="px-6 py-4">Net Profit</th>
                     {!isSuperAdmin && <th className="px-6 py-4 text-right" data-html2canvas-ignore>Actions</th>}
@@ -729,14 +780,29 @@ export default function Analytics() {
                             {new Date(row.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                           </td>
                           <td className="px-6 py-4 font-semibold text-blue-600">₹{row.revenue.toLocaleString('en-IN')}</td>
-                          <td className="px-6 py-4 font-semibold text-orange-600">₹{row.payout.toLocaleString('en-IN')}</td>
-                          <td className="px-6 py-4 hidden 2xl:table-cell">
-                            <div className="text-[10px] space-y-1 font-medium text-slate-500">
-                              <div className="flex justify-between w-28"><span>Eng:</span> <span className="text-slate-700">₹{row.departmentPayouts?.engineering?.toLocaleString('en-IN') || 0}</span></div>
-                              <div className="flex justify-between w-28"><span>Sales:</span> <span className="text-slate-700">₹{row.departmentPayouts?.sales?.toLocaleString('en-IN') || 0}</span></div>
-                              <div className="flex justify-between w-28"><span>Mktg:</span> <span className="text-slate-700">₹{row.departmentPayouts?.marketing?.toLocaleString('en-IN') || 0}</span></div>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-orange-600">₹{row.payout.toLocaleString('en-IN')}</span>
+                              <button 
+                                onClick={() => toggleRow(row.id)}
+                                className="rounded bg-slate-100 p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-600 transition-colors"
+                                title="Toggle Department Breakdown"
+                              >
+                                <svg className={`w-3 h-3 transition-transform ${expandedRows.has(row.id) ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                              </button>
                             </div>
+                            {expandedRows.has(row.id) && (
+                              <div className="mt-3 rounded-lg bg-slate-50 p-3 text-[10px] space-y-1.5 font-medium text-slate-500 border border-slate-100">
+                                <div className="text-[9px] font-bold text-slate-400 mb-2 uppercase tracking-wider">Dept Breakdown</div>
+                                <div className="flex justify-between w-32"><span>Eng:</span> <span className="text-slate-700">₹{row.departmentPayouts?.engineering?.toLocaleString('en-IN') || 0}</span></div>
+                                <div className="flex justify-between w-32"><span>Sales:</span> <span className="text-slate-700">₹{row.departmentPayouts?.sales?.toLocaleString('en-IN') || 0}</span></div>
+                                <div className="flex justify-between w-32"><span>Mktg:</span> <span className="text-slate-700">₹{row.departmentPayouts?.marketing?.toLocaleString('en-IN') || 0}</span></div>
+                                <div className="flex justify-between w-32"><span>HR/Admin:</span> <span className="text-slate-700">₹{row.departmentPayouts?.hrAdmin?.toLocaleString('en-IN') || 0}</span></div>
+                                <div className="flex justify-between w-32"><span>Other:</span> <span className="text-slate-700">₹{row.departmentPayouts?.other?.toLocaleString('en-IN') || 0}</span></div>
+                              </div>
+                            )}
                           </td>
+                          <td className="px-6 py-4 font-semibold text-amber-600">₹{(row.pendingAmount || 0).toLocaleString('en-IN')}</td>
                           <td className="px-6 py-4 font-semibold text-purple-600">
                             -₹{(row.deductions + row.otherExpenses).toLocaleString('en-IN')}
                           </td>
@@ -788,7 +854,7 @@ export default function Analytics() {
                   <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-900 text-white text-xs">1</span>
                   Adding Data
                 </h3>
-                <p className="pl-8 leading-relaxed">Use the <strong>Log Financial Data</strong> form to record your monthly figures. Revenue is your total income. Instead of entering one lump sum for employee salaries, break it down by department. The system will automatically calculate the total payout.</p>
+                <p className="pl-8 leading-relaxed">Use the <strong>Log Financial Data</strong> form to record your monthly figures. Revenue is your total income. Log the accumulated pending amounts to keep track of collections.</p>
               </div>
 
               <div>
@@ -956,6 +1022,71 @@ export default function Analytics() {
           </div>
         </div>
       )}
+      {/* PENDING CLIENTS MODAL */}
+      {showPendingModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm animate-fade-in" data-html2canvas-ignore>
+          <div className="w-full max-w-2xl transform rounded-3xl bg-white p-8 shadow-2xl transition-all">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-slate-900">Manage Pending Collections</h2>
+              <button onClick={() => setShowPendingModal(false)} className="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            
+            <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
+              {pendingClients.length === 0 ? (
+                <p className="text-center text-slate-500 py-8">No pending collections found.</p>
+              ) : (
+                pendingClients.map(client => (
+                  <div key={client.id} className="flex items-center justify-between p-4 rounded-xl border border-slate-200 bg-slate-50">
+                    <div>
+                      <h4 className="font-bold text-slate-900">{client.clientName}</h4>
+                      <p className="text-xs text-slate-500">Current Pending: <span className="font-semibold text-rose-600">₹{(client.pendingAmount || 0).toLocaleString('en-IN')}</span></p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400">₹</span>
+                        <input 
+                          type="number"
+                          placeholder="Amount Paid"
+                          className="w-32 rounded-lg border-0 bg-white py-2 pl-6 pr-2 text-sm text-slate-900 shadow-sm ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-inset focus:ring-blue-500 outline-none"
+                          value={paymentInputs[client.id] || ''}
+                          onChange={(e) => setPaymentInputs({...paymentInputs, [client.id]: parseFloat(e.target.value) || 0})}
+                        />
+                      </div>
+                      <button 
+                        onClick={async () => {
+                          const paidAmount = paymentInputs[client.id] || 0;
+                          if (paidAmount <= 0) return;
+                          const currentPending = client.pendingAmount || 0;
+                          const newPending = Math.max(0, currentPending - paidAmount);
+                          
+                          try {
+                            await updateClient(client.id, { pendingAmount: newPending });
+                            
+                            // Update local state
+                            setPendingClients(prev => prev.map(c => c.id === client.id ? { ...c, pendingAmount: newPending } : c).filter(c => (c.pendingAmount || 0) > 0));
+                            setTotalClientPending(prev => prev - (currentPending - newPending));
+                            setPaymentInputs({...paymentInputs, [client.id]: 0});
+                            alert('Pending amount updated successfully.');
+                          } catch (error) {
+                            console.error('Error updating pending amount:', error);
+                            alert('Failed to update pending amount.');
+                          }
+                        }}
+                        className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-700"
+                      >
+                        Update
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }

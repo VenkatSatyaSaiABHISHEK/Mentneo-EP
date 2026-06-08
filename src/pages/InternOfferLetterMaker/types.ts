@@ -1,34 +1,24 @@
-export interface OfferLetterData {
+export interface InternOfferLetterData {
   id?: string;
   candidateName: string;
-  address: string;
   date: string;
   position: string;
   department: string;
   employmentType: string;
-  workLocation: string;
   reportingTo: string;
   startDate: string;
-  salary: string;
-  emailId: string;
-  phoneNumber: string;
-  website: string;
+  internEmail: string;
   templateId: string;
 }
 
-export const initialOfferLetterData: OfferLetterData = {
+export const initialInternOfferLetterData: InternOfferLetterData = {
   candidateName: 'Abhishak CH',
-  address: 'Bangalore, India',
   date: new Date().toISOString().split('T')[0],
   position: 'Intern',
   department: 'Marketing & Communications',
   employmentType: 'Internship',
-  workLocation: 'Bangalore, India',
   reportingTo: 'Founder',
   startDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Next week
-  salary: '10,000',
-  emailId: 'abhishak@example.com',
-  phoneNumber: '+91 98765 43210',
-  website: '',
+  internEmail: 'intern@example.com',
   templateId: '1'
 };
