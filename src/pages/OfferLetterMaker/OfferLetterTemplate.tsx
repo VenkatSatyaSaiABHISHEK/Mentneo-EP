@@ -81,7 +81,7 @@ export default function OfferLetterTemplate({ data, templateRef }: OfferLetterTe
 
   return (
     <div ref={templateRef} className="offer-letter-container">
-      
+
       {/* PAGE 1 */}
       <div className="offer-letter-page">
         <div className="page-header">
@@ -107,7 +107,7 @@ export default function OfferLetterTemplate({ data, templateRef }: OfferLetterTe
         <div className="text-body">
           <p className="text-bold" style={{ fontSize: '14px' }}>Dear {data.candidateName?.split(' ')[0] || 'Candidate'},</p>
           <p>
-            We are pleased to extend this offer of appointment for the position of <strong>{data.position || 'Position'}</strong> at Mentneo. We were impressed with your qualifications, experience, and enthusiasm during the selection process and are excited about the potential you bring to our team.
+            We are pleased to extend this offer of appointment for the position of <strong>{data.position || 'Position'}</strong> at MENTNEO. We were impressed with your qualifications, experience, and enthusiasm during the selection process and are excited about the potential you bring to our team.
           </p>
           <p>
             This offer is a formal confirmation of your selection, and the terms and details of your association with us are outlined below:
@@ -192,13 +192,13 @@ export default function OfferLetterTemplate({ data, templateRef }: OfferLetterTe
             MENTNEO
           </div>
           <div className="header-right">
-            Offer of Appointment<br/>
+            Offer of Appointment<br />
             Page <strong>2</strong> of <strong>3</strong>
           </div>
         </div>
 
         <h2 className="section-title">3. TERMS AND CONDITIONS OF EMPLOYMENT</h2>
-        <p className="text-body" style={{ marginTop: '15px' }}>Your employment with Mentneo is subject to the following terms and conditions:</p>
+        <p className="text-body" style={{ marginTop: '15px' }}>Your employment with MENTNEO  is subject to the following terms and conditions:</p>
 
         <div className="terms-list">
           <div className="term-item">
@@ -237,7 +237,7 @@ export default function OfferLetterTemplate({ data, templateRef }: OfferLetterTe
             <div className="term-icon"><Icons.Shield /></div>
             <div className="term-content">
               <h4>3.5 INTELLECTUAL PROPERTY</h4>
-              <p>All intellectual property, including ideas, documents, strategies, and materials developed during your employment, shall remain the sole property of Mentneo.</p>
+              <p>All intellectual property, including ideas, documents, strategies, and materials developed during your employment, shall remain the sole property of MENTNEO.</p>
             </div>
           </div>
 
@@ -261,7 +261,7 @@ export default function OfferLetterTemplate({ data, templateRef }: OfferLetterTe
             <div className="term-icon"><Icons.Ban /></div>
             <div className="term-content">
               <h4>3.8 NON-COMPETE CLAUSE</h4>
-              <p>During your employment and for 6 (six) months after termination, you shall not engage in any business or activity that competes with Mentneo or solicit any of its clients, employees, or partners.</p>
+              <p>During your employment and for 6 (six) months after termination, you shall not engage in any business or activity that competes with MENTNEO or solicit any of its clients, employees, or partners.</p>
             </div>
           </div>
         </div>
@@ -275,7 +275,7 @@ export default function OfferLetterTemplate({ data, templateRef }: OfferLetterTe
             <div>
               <h4 style={{ margin: '0 0 5px 0', fontSize: '13px', fontWeight: 800, color: '#111827', textTransform: 'uppercase' }}>IMPORTANT</h4>
               <p style={{ margin: '0', fontSize: '12px', color: '#4B5563', lineHeight: '1.5' }}>
-                Please review this offer carefully.<br/>
+                Please review this offer carefully.<br />
                 Please sign and return a copy of this letter to confirm your acceptance.
               </p>
             </div>
@@ -296,7 +296,7 @@ export default function OfferLetterTemplate({ data, templateRef }: OfferLetterTe
             MENTNEO
           </div>
           <div className="header-right">
-            Offer of Appointment<br/>
+            Offer of Appointment<br />
             Page <strong>3</strong> of <strong>3</strong>
           </div>
         </div>
@@ -310,19 +310,19 @@ export default function OfferLetterTemplate({ data, templateRef }: OfferLetterTe
           <div className="icon"><Icons.FileCheck /></div>
           <div className="content">
             <h4>PLEASE NOTE</h4>
-            <p>Your employment with Mentneo is contingent upon successful completion of background verification and submission of required documents as requested by the HR team.</p>
+            <p>Your employment with MENTNEO is contingent upon successful completion of background verification and submission of required documents as requested by the HR team.</p>
           </div>
         </div>
 
-        <p className="text-body">We look forward to welcoming you to Mentneo and to a successful association.</p>
+        <p className="text-body">We look forward to welcoming you to MENTNEO and to a successful association.</p>
         <p className="text-body" style={{ marginBottom: '5px' }}>Warm regards,</p>
-        <p className="text-bold" style={{ color: '#5A4AF4', fontSize: '14px', marginBottom: '40px' }}>For Mentneo</p>
+        <p className="text-bold" style={{ color: '#5A4AF4', fontSize: '14px', marginBottom: '40px' }}>For MENTNEO</p>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '40px' }}>
           <div className="new-signature-block">
             <div className="sig-details">
-              <strong>Abhiram Yeduru</strong><br/>
-              Founder, Mentneo
+              <strong>Abhiram Yeduru</strong><br />
+              Founder, MENTNEO
             </div>
           </div>
         </div>
@@ -331,7 +331,7 @@ export default function OfferLetterTemplate({ data, templateRef }: OfferLetterTe
 
         <div className="declaration-title">ACCEPTANCE DECLARATION</div>
         <p className="text-body" style={{ textAlign: 'center', margin: '0 auto', maxWidth: '90%' }}>
-          I have read and understood the terms and conditions of this offer letter. I accept the position and agree to abide by the policies and procedures of Mentneo.
+          I have read and understood the terms and conditions of this offer letter. I accept the position and agree to abide by the policies and procedures of MENTNEO.
         </p>
 
         <div style={{ display: 'flex', justifyContent: 'center' }}>
