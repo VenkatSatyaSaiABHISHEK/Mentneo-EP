@@ -246,7 +246,7 @@ export default function OfferLetterTemplate({ data, templateRef }: OfferLetterTe
           <div className="bottom-split-right">
             <div className="contact-row"><Icons.Mail /> official@mentneo.com</div>
             <div className="contact-row"><Icons.Globe /> www.mentneo.com</div>
-            <div className="contact-row"><Icons.Phone /> +91 9182146476</div>
+            <div className="contact-row"><Icons.Phone /> +91 94924 35398</div>
           </div>
         </div>
       </div>

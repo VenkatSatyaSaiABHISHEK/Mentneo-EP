@@ -28,7 +28,7 @@ export const initialOfferLetterData: OfferLetterData = {
   startDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Next week
   salary: '10,000',
   emailId: 'abhishak@example.com',
-  phoneNumber: '+91 98765 43210',
+  phoneNumber: '+91 94924 35398',
   website: '',
   templateId: '1'
 };
