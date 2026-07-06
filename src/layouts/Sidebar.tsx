@@ -18,7 +18,7 @@ export default function Sidebar() {
   const { isSuperAdmin } = useAuth()
 
   const visibleNavItems = isSuperAdmin
-    ? navItems.filter(item => ['Employees', 'Analytics', 'Profile'].includes(item.label))
+    ? navItems.filter(item => ['Employees', 'Attendance', 'Analytics', 'Profile'].includes(item.label))
     : navItems
 
   return (

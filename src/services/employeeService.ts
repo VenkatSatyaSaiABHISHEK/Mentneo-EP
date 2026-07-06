@@ -182,3 +182,8 @@ export const updateEmployee = async (id: string, data: Partial<EmployeeRecord>) 
   
   await writeBatch(db).update(docRef, updateData).commit()
 }
+
+export const deleteEmployee = async (id: string) => {
+  const docRef = doc(db, EMPLOYEE_COLLECTION, id)
+  await writeBatch(db).delete(docRef).commit()
+}

@@ -10,18 +10,22 @@ import {
   subMonths,
   isToday
 } from 'date-fns'
-import { getAttendanceForDate, cleanupOldImages } from '../services/attendanceService'
+import { getAttendanceForDate, cleanupOldImages, getAttendanceForMonth } from '../services/attendanceService'
 import { getEmployees } from '../services/employeeService'
 import type { AttendanceRecord } from '../types/attendance'
 import type { EmployeeRecord } from '../types/employee'
 import Button from '../components/Button'
 import Card from '../components/Card'
+import { useAuth } from '../context/AuthContext'
 
 export default function Attendance() {
   const navigate = useNavigate()
+  const { isSuperAdmin } = useAuth()
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([])
   const [employees, setEmployees] = useState<EmployeeRecord[]>([])
+  const [monthlyRecords, setMonthlyRecords] = useState<AttendanceRecord[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState<'daily' | 'monthly'>('daily')
   
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [currentMonth, setCurrentMonth] = useState(new Date())
@@ -47,6 +51,19 @@ export default function Attendance() {
     void loadData()
   }, [dateKey])
 
+  useEffect(() => {
+    const loadMonthlyData = async () => {
+      const monthKey = format(currentMonth, 'yyyy-MM')
+      try {
+        const records = await getAttendanceForMonth(monthKey)
+        setMonthlyRecords(records)
+      } catch (err) {
+        console.error('Failed to load monthly records:', err)
+      }
+    }
+    void loadMonthlyData()
+  }, [currentMonth])
+
   const presentCount = attendance.length
   const totalCount = employees.length
   const absentCount = Math.max(0, totalCount - presentCount)
@@ -68,14 +85,11 @@ export default function Attendance() {
     setIsLoading(true)
     try {
       let csvContent = "Date,Employee Name,Employee ID,Check-in Time\n"
-      // Loop over each day in the selected month
-      for (const day of daysInMonth) {
-        const dayKey = format(day, 'yyyy-MM-dd')
-        const records = await getAttendanceForDate(dayKey)
-        records.forEach(r => {
-          csvContent += `${dayKey},"${r.name}",${r.empId},${r.time}\n`
-        })
-      }
+      
+      const sortedRecords = [...monthlyRecords].sort((a, b) => a.date.localeCompare(b.date))
+      sortedRecords.forEach(r => {
+        csvContent += `${r.date},"${r.name}",${r.empId},${r.time}\n`
+      })
       
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
       const link = document.createElement('a')
@@ -107,12 +121,14 @@ export default function Attendance() {
           >
             Export Monthly CSV
           </Button>
-          <Button 
-            onClick={() => navigate('/kiosk')}
-            className="bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 px-6 py-2.5 rounded-full font-bold whitespace-nowrap"
-          >
-            Launch Fullscreen Kiosk
-          </Button>
+          {!isSuperAdmin && (
+            <Button 
+              onClick={() => navigate('/kiosk')}
+              className="bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 px-6 py-2.5 rounded-full font-bold whitespace-nowrap"
+            >
+              Launch Fullscreen Kiosk
+            </Button>
+          )}
         </div>
       </div>
 
@@ -181,55 +197,136 @@ export default function Attendance() {
           </div>
         </Card>
 
-        {/* Attendance Logs List */}
+        {/* Attendance Logs List & Monthly Summary */}
         <Card className="animate-rise">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-bold text-slate-900">Attendance Log <span className="text-slate-400 font-normal ml-2">({dateKey})</span></h3>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+            <div className="flex items-center gap-4 bg-slate-100 p-1 rounded-xl w-fit">
+              <button
+                onClick={() => setActiveTab('daily')}
+                className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
+                  activeTab === 'daily'
+                    ? 'bg-white text-slate-900 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                Daily Logs
+              </button>
+              <button
+                onClick={() => setActiveTab('monthly')}
+                className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
+                  activeTab === 'monthly'
+                    ? 'bg-white text-slate-900 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                Monthly Summary
+              </button>
+            </div>
+            <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider">
+              {activeTab === 'daily' ? `Log for ${dateKey}` : `Summary for ${format(currentMonth, 'MMMM yyyy')}`}
+            </h3>
           </div>
           
           <div className="space-y-3">
-            {isLoading ? (
-              <div className="animate-pulse space-y-3">
-                {[1,2,3,4].map(i => <div key={i} className="h-14 bg-slate-100 rounded-xl"></div>)}
-              </div>
-            ) : attendance.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-slate-400">
-                <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" className="mb-4 opacity-50"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-                <p>No check-ins found for this date.</p>
+            {activeTab === 'daily' ? (
+              <div>
+                {isLoading ? (
+                  <div className="animate-pulse space-y-3">
+                    {[1,2,3,4].map(i => <div key={i} className="h-14 bg-slate-100 rounded-xl"></div>)}
+                  </div>
+                ) : attendance.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-slate-400">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" className="mb-4 opacity-50"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                    <p>No check-ins found for this date.</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm text-slate-600 border-separate border-spacing-y-2">
+                      <thead className="text-xs uppercase tracking-wider text-slate-400 bg-slate-50">
+                        <tr>
+                          <th className="px-4 py-3 rounded-l-xl font-semibold">Employee</th>
+                          <th className="px-4 py-3 font-semibold">ID</th>
+                          <th className="px-4 py-3 font-semibold">Check-in Time</th>
+                          <th className="px-4 py-3 text-right rounded-r-xl font-semibold">Verification Photo</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {attendance.map((record) => (
+                          <tr key={record.id} className="bg-white hover:bg-slate-50 transition-colors shadow-sm border border-slate-100 rounded-xl overflow-hidden">
+                            <td className="px-4 py-3 font-bold text-slate-900 border-y border-l border-slate-100 rounded-l-xl">{record.name}</td>
+                            <td className="px-4 py-3 text-slate-500 font-mono border-y border-slate-100">{record.empId}</td>
+                            <td className="px-4 py-3 text-emerald-600 font-semibold border-y border-slate-100">{record.time}</td>
+                            <td className="px-4 py-3 text-right border-y border-r border-slate-100 rounded-r-xl">
+                              {record.imageUrl ? (
+                                <div className="flex items-center justify-end gap-3">
+                                  <img src={record.imageUrl} alt="Verification" className="h-10 w-10 rounded-lg object-cover border border-slate-200" />
+                                  <button onClick={() => downloadImage(record.imageUrl!, record.name)} className="text-slate-400 hover:text-sky-500" title="Download Image">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                  </button>
+                                </div>
+                              ) : (
+                                <span className="text-xs text-slate-400 px-2 py-1 bg-slate-100 rounded-md">Expired / No Photo</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm text-slate-600 border-separate border-spacing-y-2">
-                  <thead className="text-xs uppercase tracking-wider text-slate-400 bg-slate-50">
-                    <tr>
-                      <th className="px-4 py-3 rounded-l-xl font-semibold">Employee</th>
-                      <th className="px-4 py-3 font-semibold">ID</th>
-                      <th className="px-4 py-3 font-semibold">Check-in Time</th>
-                      <th className="px-4 py-3 text-right rounded-r-xl font-semibold">Verification Photo</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {attendance.map((record) => (
-                      <tr key={record.id} className="bg-white hover:bg-slate-50 transition-colors shadow-sm border border-slate-100 rounded-xl overflow-hidden">
-                        <td className="px-4 py-3 font-bold text-slate-900 border-y border-l border-slate-100 rounded-l-xl">{record.name}</td>
-                        <td className="px-4 py-3 text-slate-500 font-mono border-y border-slate-100">{record.empId}</td>
-                        <td className="px-4 py-3 text-emerald-600 font-semibold border-y border-slate-100">{record.time}</td>
-                        <td className="px-4 py-3 text-right border-y border-r border-slate-100 rounded-r-xl">
-                          {record.imageUrl ? (
-                            <div className="flex items-center justify-end gap-3">
-                              <img src={record.imageUrl} alt="Verification" className="h-10 w-10 rounded-lg object-cover border border-slate-200" />
-                              <button onClick={() => downloadImage(record.imageUrl!, record.name)} className="text-slate-400 hover:text-sky-500" title="Download Image">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                              </button>
-                            </div>
-                          ) : (
-                            <span className="text-xs text-slate-400 px-2 py-1 bg-slate-100 rounded-md">Expired / No Photo</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div>
+                {isLoading ? (
+                  <div className="animate-pulse space-y-3">
+                    {[1,2,3,4].map(i => <div key={i} className="h-14 bg-slate-100 rounded-xl"></div>)}
+                  </div>
+                ) : employees.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-slate-400">
+                    <p>No employees found in directory.</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm text-slate-600 border-separate border-spacing-y-2">
+                      <thead className="text-xs uppercase tracking-wider text-slate-400 bg-slate-50">
+                        <tr>
+                          <th className="px-4 py-3 rounded-l-xl font-semibold">Employee</th>
+                          <th className="px-4 py-3 font-semibold">ID</th>
+                          <th className="px-4 py-3 text-right rounded-r-xl font-semibold">Days Checked In</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {employees.map((emp) => {
+                          const count = monthlyRecords.filter(r => r.empId === emp.employeeId).length
+                          return (
+                            <tr key={emp.id} className="bg-white hover:bg-slate-50 transition-colors shadow-sm border border-slate-100 rounded-xl overflow-hidden">
+                              <td className="px-4 py-3 font-bold text-slate-900 border-y border-l border-slate-100 rounded-l-xl">
+                                <div className="flex items-center gap-3">
+                                  {emp.profileImageUrl ? (
+                                    <img src={emp.profileImageUrl} alt="" className="h-8 w-8 rounded-full object-cover border border-slate-200" />
+                                  ) : (
+                                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 font-bold text-xs">
+                                      {emp.name.charAt(0)}
+                                    </div>
+                                  )}
+                                  <span>{emp.name}</span>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-slate-500 font-mono border-y border-slate-100">{emp.employeeId}</td>
+                              <td className="px-4 py-3 text-right border-y border-r border-slate-100 rounded-r-xl">
+                                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${
+                                  count > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
+                                }`}>
+                                  {count} Days
+                                </span>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             )}
           </div>

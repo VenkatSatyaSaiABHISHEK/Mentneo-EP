@@ -129,3 +129,23 @@ export const cleanupOldImages = async () => {
     console.error('Error cleaning up old images:', err)
   }
 }
+
+export const getAttendanceForMonth = async (monthKey: string): Promise<AttendanceRecord[]> => {
+  const snapshot = await getDocs(
+    query(
+      collection(db, ATTENDANCE_COLLECTION),
+      where('date', '>=', `${monthKey}-01`),
+      where('date', '<=', `${monthKey}-31`)
+    )
+  )
+
+  return snapshot.docs.map((docItem) => ({
+    id: docItem.id,
+    empId: docItem.data().empId,
+    name: docItem.data().name,
+    date: docItem.data().date,
+    time: docItem.data().time,
+    status: docItem.data().status ?? 'present',
+    imageUrl: docItem.data().imageUrl ?? undefined,
+  }))
+}

@@ -4,7 +4,7 @@ import Button from '../components/Button'
 import Card from '../components/Card'
 import CsvUpload from '../components/CsvUpload'
 import Table, { type Column } from '../components/Table'
-import { getEmployees, addEmployee, updateEmployee } from '../services/employeeService'
+import { getEmployees, addEmployee, updateEmployee, deleteEmployee } from '../services/employeeService'
 import { getAllAttendanceForEmployee } from '../services/attendanceService'
 import type { EmployeeRecord } from '../types/employee'
 import type { AttendanceRecord } from '../types/attendance'
@@ -207,24 +207,37 @@ export default function Employees() {
       render: (_, row) => (
         <div className="flex flex-col gap-2 py-1 items-center">
           <div className="flex flex-wrap items-center justify-center gap-2">
-            {!isSuperAdmin && (
-              <button
-                onClick={() => {
-                  setEditingEmployee(row)
-                  setEditFormData(row)
-                  setIsAdminUnlocked(false)
-                  setAdminPasswordInput('')
-                }}
-                className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-200"
-              >
-                Edit Details
-              </button>
-            )}
+            <button
+              onClick={() => {
+                setEditingEmployee(row)
+                setEditFormData(row)
+                setIsAdminUnlocked(false)
+                setAdminPasswordInput('')
+              }}
+              className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-200"
+            >
+              Edit Details
+            </button>
             <button
               onClick={() => handleViewAttendance(row)}
               className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-200"
             >
               View More
+            </button>
+            <button
+              onClick={async () => {
+                if (window.confirm(`Are you sure you want to remove ${row.name}? This action cannot be undone.`)) {
+                  try {
+                    await deleteEmployee(row.id)
+                    await loadEmployees()
+                  } catch (err) {
+                    alert('Failed to remove employee: ' + (err as Error).message)
+                  }
+                }
+              }}
+              className="rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-700 transition hover:bg-rose-200"
+            >
+              Remove
             </button>
             <button
               onClick={() => handleDownloadQr(row)}
@@ -393,16 +406,16 @@ export default function Employees() {
             </p>
           </div>
           
-          {!isSuperAdmin && (
-            <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            {!isSuperAdmin && (
               <Button variant="outline" onClick={() => setShowResetModal(true)} disabled={isResetting} className="text-rose-600 border-rose-200 hover:bg-rose-50">
                 {isResetting ? 'Resetting...' : 'Security Reset (Passwords)'}
               </Button>
-              <Button onClick={() => setShowAddForm(!showAddForm)}>
-                {showAddForm ? 'Cancel' : '+ Add Employee'}
-              </Button>
-            </div>
-          )}
+            )}
+            <Button onClick={() => setShowAddForm(!showAddForm)}>
+              {showAddForm ? 'Cancel' : '+ Add Employee'}
+            </Button>
+          </div>
         </div>
       </Card>
 
@@ -531,9 +544,7 @@ export default function Employees() {
         </div>
       )}
 
-      {!isSuperAdmin && (
-        <CsvUpload onUploaded={loadEmployees} />
-      )}
+      <CsvUpload onUploaded={loadEmployees} />
       <Card className="animate-rise">
         <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
@@ -541,14 +552,12 @@ export default function Employees() {
             <h3 className="mt-2 text-lg font-semibold text-slate-900">Active roster</h3>
           </div>
           <div className="flex flex-wrap gap-3 items-center">
-            {!isSuperAdmin && (
-              <button
-                onClick={handleExportCsv}
-                className="rounded-full bg-emerald-600 hover:bg-emerald-700 px-4 py-2 text-sm font-semibold text-white transition shadow-sm"
-              >
-                Export Credentials CSV
-              </button>
-            )}
+            <button
+              onClick={handleExportCsv}
+              className="rounded-full bg-emerald-600 hover:bg-emerald-700 px-4 py-2 text-sm font-semibold text-white transition shadow-sm"
+            >
+              Export Credentials CSV
+            </button>
             <input
               type="text"
               placeholder="Search by name or ID"
