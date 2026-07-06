@@ -26,6 +26,35 @@ export default function ClientData() {
   const [editClientDataFile, setEditClientDataFile] = useState<File | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
 
+  // Expanded dates list
+  const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
+
+  const toggleDateExpand = (clientId: string) => {
+    setExpandedDates(prev => {
+      const next = new Set(prev);
+      if (next.has(clientId)) {
+        next.delete(clientId);
+      } else {
+        next.add(clientId);
+      }
+      return next;
+    });
+  };
+
+  const formatSimpleDate = (dateStr?: string) => {
+    if (!dateStr) return 'N/A';
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return 'N/A';
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); // e.g. "Jun 2"
+  };
+
+  const formatFullDate = (dateStr?: string) => {
+    if (!dateStr) return 'N/A';
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return 'N/A';
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); // e.g. "Jun 2, 2026"
+  };
+
   useEffect(() => {
     fetchClients();
   }, []);
@@ -262,6 +291,7 @@ export default function ClientData() {
               <tr>
                 <th className="px-6 py-4 font-semibold">Client Name</th>
                 <th className="px-6 py-4 font-semibold">Phone</th>
+                <th className="px-6 py-4 font-semibold">Created</th>
                 <th className="px-6 py-4 font-semibold">Telecaller</th>
                 <th className="px-6 py-4 font-semibold">Editor</th>
                 <th className="px-6 py-4 font-semibold">Package</th>
@@ -275,7 +305,7 @@ export default function ClientData() {
             <tbody className="divide-y divide-slate-100 bg-white">
               {isLoading ? (
                 <tr>
-                  <td colSpan={isSuperAdmin ? 9 : 10} className="px-6 py-12 text-center text-slate-500">
+                  <td colSpan={isSuperAdmin ? 10 : 11} className="px-6 py-12 text-center text-slate-500">
                     Loading clients...
                   </td>
                 </tr>
@@ -283,6 +313,16 @@ export default function ClientData() {
                 <tr key={client.id} className="hover:bg-slate-50/50 transition-colors">
                   <td className="px-6 py-4 font-medium text-slate-900">{client.clientName}</td>
                   <td className="px-6 py-4">{client.phoneNumber}</td>
+                  <td 
+                    className="px-6 py-4 cursor-pointer hover:text-blue-600 transition-colors select-none font-medium text-slate-700"
+                    onClick={() => toggleDateExpand(client.id)}
+                    title="Click to toggle full date"
+                  >
+                    {expandedDates.has(client.id) 
+                      ? formatFullDate(client.createdAt) 
+                      : formatSimpleDate(client.createdAt)
+                    }
+                  </td>
                   <td className="px-6 py-4">{client.telecallerName}</td>
                   <td className="px-6 py-4">{client.editorName}</td>
                   <td className="px-6 py-4">
@@ -335,7 +375,7 @@ export default function ClientData() {
               ))}
               {!isLoading && clients.length === 0 && (
                 <tr>
-                  <td colSpan={isSuperAdmin ? 9 : 10} className="px-6 py-12 text-center text-slate-500">
+                  <td colSpan={isSuperAdmin ? 10 : 11} className="px-6 py-12 text-center text-slate-500">
                     No clients found. Click "Add New Client" or "Upload CSV" to get started.
                   </td>
                 </tr>
@@ -468,6 +508,23 @@ export default function ClientData() {
                     className="w-full rounded-xl border-slate-200 border px-4 py-3 text-sm focus:border-blue-500 focus:ring-blue-500/20 transition-all outline-none"
                     placeholder="e.g. 5000"
                     min="0"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">Creation Date (Optional)</label>
+                  <input
+                    type="date"
+                    name="createdAt"
+                    value={newClient.createdAt ? newClient.createdAt.split('T')[0] : ''}
+                    onChange={(e) => {
+                      const dateVal = e.target.value;
+                      setNewClient({ 
+                        ...newClient, 
+                        createdAt: dateVal ? new Date(dateVal).toISOString() : undefined 
+                      });
+                    }}
+                    className="w-full rounded-xl border-slate-200 border px-4 py-3 text-sm focus:border-blue-500 focus:ring-blue-500/20 transition-all outline-none bg-white"
                   />
                 </div>
 
@@ -638,6 +695,23 @@ export default function ClientData() {
                     className="w-full rounded-xl border-slate-200 border px-4 py-3 text-sm focus:border-blue-500 focus:ring-blue-500/20 transition-all outline-none"
                     placeholder="e.g. 5000"
                     min="0"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">Creation Date</label>
+                  <input
+                    type="date"
+                    name="createdAt"
+                    value={editFormData.createdAt ? editFormData.createdAt.split('T')[0] : ''}
+                    onChange={(e) => {
+                      const dateVal = e.target.value;
+                      setEditFormData({ 
+                        ...editFormData, 
+                        createdAt: dateVal ? new Date(dateVal).toISOString() : undefined 
+                      });
+                    }}
+                    className="w-full rounded-xl border-slate-200 border px-4 py-3 text-sm focus:border-blue-500 focus:ring-blue-500/20 transition-all outline-none bg-white"
                   />
                 </div>
 

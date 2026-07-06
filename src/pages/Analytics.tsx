@@ -26,8 +26,12 @@ export default function Analytics() {
   const [isLoading, setIsLoading] = useState(true)
   const [showGuide, setShowGuide] = useState(false)
   const [showVisualsModal, setShowVisualsModal] = useState(false)
-  const [totalClientPending, setTotalClientPending] = useState(0)
-  const [selectedMonth, setSelectedMonth] = useState(() => new Date().toISOString().substring(0, 7))
+  const [selectedMonth, setSelectedMonth] = useState(() => {
+    const now = new Date()
+    const year = now.getFullYear()
+    const month = String(now.getMonth() + 1).padStart(2, '0')
+    return `${year}-${month}`
+  })
   const [showPendingModal, setShowPendingModal] = useState(false)
   const [pendingClients, setPendingClients] = useState<Client[]>([])
   const [paymentInputs, setPaymentInputs] = useState<Record<string, number>>({})
@@ -59,8 +63,6 @@ export default function Analytics() {
 
         // Fetch client pending collections
         const fetchedClients = await getAllClients()
-        const pendingSum = fetchedClients.reduce((sum, client) => sum + (Number(client.pendingAmount) || 0), 0)
-        setTotalClientPending(pendingSum)
         setPendingClients(fetchedClients.filter(c => (Number(c.pendingAmount) || 0) > 0))
         
         // Auto-load today's data if it exists
@@ -316,6 +318,45 @@ export default function Analytics() {
     return groups
   }, [pendingClients])
 
+  // Localized year-month getter
+  const getClientYearMonth = (createdAtStr?: string) => {
+    if (!createdAtStr) return '';
+    const date = new Date(createdAtStr);
+    if (isNaN(date.getTime())) return '';
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    return `${year}-${month}`;
+  };
+
+  // Dynamic pending collections calculations
+  const pendingMetrics = useMemo(() => {
+    let thisMonthTotal = 0;
+    let oldPendingTotal = 0;
+    
+    pendingClients.forEach(client => {
+      const amount = Number(client.pendingAmount) || 0;
+      if (amount <= 0) return;
+      
+      const clientMonth = getClientYearMonth(client.createdAt);
+      if (clientMonth) {
+        if (clientMonth === selectedMonth) {
+          thisMonthTotal += amount;
+        } else if (clientMonth < selectedMonth) {
+          oldPendingTotal += amount;
+        }
+      } else {
+        // Treat clients with missing/invalid dates as old pending collections
+        oldPendingTotal += amount;
+      }
+    });
+    
+    return {
+      thisMonthTotal,
+      oldPendingTotal,
+      totalUpToSelectedMonth: thisMonthTotal + oldPendingTotal,
+    };
+  }, [pendingClients, selectedMonth]);
+
   const currentMonthData = data.filter(d => d.date.startsWith(selectedMonth))
 
   const totalRevenue = currentMonthData.reduce((acc, curr) => acc + curr.revenue, 0)
@@ -492,9 +533,13 @@ export default function Analytics() {
             </div>
           </div>
           <h3 className="relative z-10 mt-4 text-3xl font-bold tracking-tight">
-            {isLoading ? '...' : `₹${totalClientPending.toLocaleString('en-IN')}`}
+            {isLoading ? '...' : `₹${pendingMetrics.totalUpToSelectedMonth.toLocaleString('en-IN')}`}
           </h3>
-          <p className="relative z-10 mt-1 text-sm text-amber-100 opacity-90">Outstanding client balance</p>
+          <div className="relative z-10 mt-2 text-xs text-amber-100/90 flex flex-wrap gap-x-2 gap-y-0.5">
+            <span>Old: <strong className="text-white">₹{pendingMetrics.oldPendingTotal.toLocaleString('en-IN')}</strong></span>
+            <span className="opacity-50">•</span>
+            <span>This Month: <strong className="text-white">₹{pendingMetrics.thisMonthTotal.toLocaleString('en-IN')}</strong></span>
+          </div>
         </div>
       </section>
 
@@ -1124,7 +1169,6 @@ export default function Analytics() {
                               
                               // Update local state
                               setPendingClients(prev => prev.map(c => c.id === client.id ? { ...c, pendingAmount: newPending } : c).filter(c => (c.pendingAmount || 0) > 0));
-                              setTotalClientPending(prev => prev - (currentPending - newPending));
                               setPaymentInputs({...paymentInputs, [client.id]: 0});
                               alert('Pending amount updated successfully.');
                             } catch (error) {

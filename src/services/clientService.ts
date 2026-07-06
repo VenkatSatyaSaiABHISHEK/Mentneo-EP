@@ -16,7 +16,7 @@ const CLIENTS_COLLECTION = 'clients'
 export const createClient = async (payload: Omit<Client, 'id'>) => {
   const docRef = await addDoc(collection(db, CLIENTS_COLLECTION), {
     ...payload,
-    createdAt: serverTimestamp(),
+    createdAt: payload.createdAt ? new Date(payload.createdAt) : serverTimestamp(),
   })
   return docRef.id
 }
@@ -47,8 +47,12 @@ export const getAllClients = async (): Promise<Client[]> => {
 
 export const updateClient = async (clientId: string, payload: Partial<Client>) => {
   const docRef = doc(db, CLIENTS_COLLECTION, clientId)
+  const dataToSave = { ...payload }
+  if (payload.createdAt !== undefined) {
+    dataToSave.createdAt = payload.createdAt ? new Date(payload.createdAt) as any : null
+  }
   await updateDoc(docRef, {
-    ...payload,
+    ...dataToSave,
     updatedAt: serverTimestamp(),
   })
 }
