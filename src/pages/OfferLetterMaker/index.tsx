@@ -346,7 +346,7 @@ export default function OfferLetterMaker() {
                 <InputField label="Work Location" name="workLocation" value={data.workLocation} onChange={handleInputChange} />
                 <InputField label="Reporting To" name="reportingTo" value={data.reportingTo} onChange={handleInputChange} />
                 <InputField label="Start Date" name="startDate" type="date" value={data.startDate} onChange={handleInputChange} />
-                <InputField label="Monthly Stipend" name="salary" value={data.salary} onChange={handleInputChange} />
+                <InputField label="Yearly CTC" name="salary" value={data.salary} onChange={handleInputChange} />
               </div>
             </div>
 

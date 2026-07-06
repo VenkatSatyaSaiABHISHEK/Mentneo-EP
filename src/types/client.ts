@@ -12,4 +12,5 @@ export interface Client {
   paymentPhotoUrl?: string;
   clientDataUrl?: string;
   pendingAmount?: number;
+  createdAt?: string;
 }

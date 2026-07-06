@@ -161,7 +161,7 @@ export default function OfferLetterTemplate({ data, templateRef }: OfferLetterTe
           </thead>
           <tbody>
             <tr>
-              <td>Monthly Stipend</td>
+              <td>Yearly CTC</td>
               <td>₹ {formatCurrency(data.salary)}</td>
             </tr>
             <tr>

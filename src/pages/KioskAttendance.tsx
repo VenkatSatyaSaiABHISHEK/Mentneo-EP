@@ -8,6 +8,7 @@ import { signInWithEmailAndPassword } from 'firebase/auth'
 import { auth } from '../services/firebase'
 import { useAuth } from '../context/AuthContext'
 import QrScanner from '../components/QrScanner'
+import { getKioskSettings } from '../services/settingsService'
 
 const DUP_WINDOW_MS = 60 * 1000
 
@@ -74,14 +75,60 @@ export default function KioskAttendance() {
   const [adminPassword, setAdminPassword] = useState('')
   const [exitError, setExitError] = useState('')
   const [isFullscreen, setIsFullscreen] = useState(false)
-  
-  const [showManualEntry, setShowManualEntry] = useState(false)
+  const [mode, setMode] = useState<'camera' | 'pin'>('camera')
   const [manualEmpId, setManualEmpId] = useState('')
-  const [manualPin, setManualPin] = useState('')
   const [manualError, setManualError] = useState('')
   const [isManualLoading, setIsManualLoading] = useState(false)
+  const pinVideoRef = useRef<HTMLVideoElement>(null)
   
   const lastScanRef = useRef<Map<string, number>>(new Map())
+
+  const startPinCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: false })
+      if (pinVideoRef.current) {
+        pinVideoRef.current.srcObject = stream
+      }
+    } catch (err) {
+      console.error("Error starting pin camera:", err)
+    }
+  }
+
+  const stopPinCamera = () => {
+    if (pinVideoRef.current && pinVideoRef.current.srcObject) {
+      const stream = pinVideoRef.current.srcObject as MediaStream
+      stream.getTracks().forEach(track => track.stop())
+      pinVideoRef.current.srcObject = null
+    }
+  }
+
+  const capturePhoto = (videoElement: HTMLVideoElement | null): string | undefined => {
+    if (!videoElement) return undefined
+    try {
+      const canvas = document.createElement('canvas')
+      canvas.width = videoElement.videoWidth || 640
+      canvas.height = videoElement.videoHeight || 480
+      const ctx = canvas.getContext('2d')
+      if (ctx) {
+        ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height)
+        return canvas.toDataURL('image/jpeg', 0.8)
+      }
+    } catch (err) {
+      console.error("Error capturing photo:", err)
+    }
+    return undefined
+  }
+
+  useEffect(() => {
+    if (mode === 'pin' && isFullscreen && !showExitPrompt) {
+      startPinCamera()
+    } else {
+      stopPinCamera()
+    }
+    return () => {
+      stopPinCamera()
+    }
+  }, [mode, isFullscreen, showExitPrompt])
 
   const todayKey = useMemo(() => getTodayKey(), [])
 
@@ -171,6 +218,15 @@ export default function KioskAttendance() {
 
   useEffect(() => {
     void loadAttendance()
+    const loadSettings = async () => {
+      try {
+        const settings = await getKioskSettings()
+        setMode(settings.attendanceMethod)
+      } catch (err) {
+        console.error('Error loading settings:', err)
+      }
+    }
+    void loadSettings()
   }, [loadAttendance])
 
   const handleQrScan = async (decodedText: string) => {
@@ -224,7 +280,13 @@ export default function KioskAttendance() {
         return
       }
 
-      await saveAttendance({ empId: employee.employeeId, name: employee.name, imageUrl: undefined })
+      let capturedImgUrl: string | undefined = undefined
+      const qrVideoElement = document.querySelector('.qr-scanner video') as HTMLVideoElement | null
+      if (qrVideoElement) {
+        capturedImgUrl = capturePhoto(qrVideoElement)
+      }
+
+      await saveAttendance({ empId: employee.employeeId, name: employee.name, imageUrl: capturedImgUrl })
       lastScanRef.current.set(employeeId, Date.now())
       
       setStatusMessage(`Welcome, ${employee.name}! Attendance marked.`)
@@ -254,8 +316,8 @@ export default function KioskAttendance() {
     setManualError('')
     resetIdle()
     
-    if (!manualEmpId.trim() || !manualPin.trim()) {
-      setManualError('Please enter both Employee ID and PIN.')
+    if (!manualEmpId.trim()) {
+      setManualError('Please enter your Employee ID.')
       playErrorChime()
       return
     }
@@ -265,14 +327,6 @@ export default function KioskAttendance() {
       const employee = await getEmployeeByEmployeeId(manualEmpId.trim().toUpperCase())
       if (!employee) {
         setManualError('Invalid Employee ID.')
-        playErrorChime()
-        setIsManualLoading(false)
-        return
-      }
-
-      const validPin = employee.password || '1234'
-      if (manualPin !== validPin) {
-        setManualError('Incorrect PIN.')
         playErrorChime()
         setIsManualLoading(false)
         return
@@ -296,7 +350,12 @@ export default function KioskAttendance() {
         return
       }
 
-      await saveAttendance({ empId: employee.employeeId, name: employee.name, imageUrl: undefined })
+      let capturedImgUrl: string | undefined = undefined
+      if (pinVideoRef.current) {
+        capturedImgUrl = capturePhoto(pinVideoRef.current)
+      }
+
+      await saveAttendance({ empId: employee.employeeId, name: employee.name, imageUrl: capturedImgUrl })
       lastScanRef.current.set(employee.employeeId, Date.now())
       
       setStatusMessage(`Welcome, ${employee.name}! Attendance marked.`)
@@ -304,9 +363,7 @@ export default function KioskAttendance() {
       playSuccessChime()
       await loadAttendance()
       
-      setShowManualEntry(false)
       setManualEmpId('')
-      setManualPin('')
       
       setTimeout(() => {
         setStatusMessage('')
@@ -353,7 +410,7 @@ export default function KioskAttendance() {
     <div className="flex min-h-screen flex-col gap-8 bg-[#f3f4f6] bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px] p-6 md:flex-row items-center justify-center relative overflow-hidden select-none">
       
       {/* Idle Screensaver */}
-      {isIdle && isFullscreen && !showExitPrompt && !showManualEntry && (
+      {isIdle && isFullscreen && !showExitPrompt && mode === 'camera' && (
         <div 
           className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-slate-900/95 backdrop-blur-xl transition-opacity duration-1000 cursor-pointer"
           onClick={resetIdle}
@@ -412,51 +469,6 @@ export default function KioskAttendance() {
         </div>
       )}
 
-      {/* Manual Entry Modal */}
-      {showManualEntry && (
-        <div className="absolute inset-0 z-[60] flex items-center justify-center bg-slate-900/40 backdrop-blur-md">
-          <form onSubmit={handleManualSubmit} className="w-full max-w-sm rounded-3xl bg-white p-8 shadow-2xl border border-slate-100">
-            <h3 className="text-xl font-bold text-slate-900 mb-2">Manual Check-in</h3>
-            <p className="text-sm text-slate-500 mb-6">Enter your Employee ID and secure PIN.</p>
-            
-            {manualError && (
-              <p className="mb-4 text-xs font-bold text-rose-500 bg-rose-50 p-3 rounded-xl border border-rose-100">{manualError}</p>
-            )}
-            
-            <div className="space-y-4 mb-8">
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Employee ID</label>
-                <input 
-                  type="text" 
-                  placeholder="e.g. EPMN0001"
-                  value={manualEmpId}
-                  onChange={e => setManualEmpId(e.target.value)}
-                  className="w-full rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono uppercase"
-                  autoFocus
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Secure PIN</label>
-                <input 
-                  type="password" 
-                  placeholder="••••"
-                  value={manualPin}
-                  onChange={e => setManualPin(e.target.value)}
-                  className="w-full rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 tracking-[0.2em]"
-                />
-              </div>
-            </div>
-            
-            <div className="flex gap-3">
-              <Button type="button" variant="outline" className="flex-1" onClick={() => {setShowManualEntry(false); setManualEmpId(''); setManualPin(''); setManualError('');}}>Cancel</Button>
-              <Button type="submit" className="flex-1 bg-emerald-500 text-white hover:bg-emerald-600 border-none shadow-lg shadow-emerald-500/30" disabled={isManualLoading}>
-                {isManualLoading ? 'Verifying...' : 'Check In'}
-              </Button>
-            </div>
-          </form>
-        </div>
-      )}
-
       {/* Secret Exit Button (Bottom Left Corner) */}
       <button 
         onClick={() => setShowExitPrompt(true)}
@@ -465,26 +477,65 @@ export default function KioskAttendance() {
         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
       </button>
 
-      {/* Left Panel: QR Scanner */}
+      {/* Left Panel: QR Scanner & PIN Code */}
       <div className="flex w-full max-w-[420px] flex-col justify-center rounded-[2.5rem] bg-white/70 backdrop-blur-xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white h-full max-h-[800px] relative z-10">
         <div className="mx-auto w-full">
-          <div className="mb-6 text-center">
-            <h2 className="text-3xl font-bold tracking-tight text-slate-900">Scan ID</h2>
-            <p className="mt-2 text-sm text-slate-500">Show your Employee QR Code</p>
-          </div>
+          
 
-          <div className="rounded-3xl overflow-hidden shadow-inner bg-white/50">
-            <QrScanner onScan={handleQrScan} />
-          </div>
 
-          <div className="mt-4 flex justify-center">
-            <button 
-              onClick={() => { setShowManualEntry(true); setStatusMessage(''); setStatusTone('idle'); }}
-              className="text-sm font-semibold text-emerald-600 hover:text-emerald-700 underline underline-offset-4"
-            >
-              Forgot QR Code? Enter PIN
-            </button>
-          </div>
+          {mode === 'camera' ? (
+            <div className="w-full">
+              <div className="mb-6 text-center">
+                <h2 className="text-3xl font-bold tracking-tight text-slate-900">Scan ID</h2>
+                <p className="mt-2 text-sm text-slate-500">Show your Employee QR Code</p>
+              </div>
+
+              <div className="rounded-3xl overflow-hidden shadow-inner bg-white/50">
+                <QrScanner onScan={handleQrScan} />
+              </div>
+            </div>
+          ) : (
+            <form onSubmit={handleManualSubmit} className="w-full animate-rise">
+              <div className="mb-4 text-center">
+                <h2 className="text-2xl font-bold tracking-tight text-slate-900">Quick Check-in</h2>
+                <p className="mt-1.5 text-xs text-slate-500">Align your face and enter your Employee ID</p>
+              </div>
+
+              {/* Camera Preview */}
+              <div className="relative h-44 w-full overflow-hidden rounded-2xl border border-slate-200 mb-4 bg-slate-950 shadow-inner">
+                <video 
+                  ref={pinVideoRef} 
+                  autoPlay 
+                  playsInline 
+                  muted
+                  className="h-full w-full object-cover transform -scale-x-100" 
+                />
+                <div className="absolute inset-0 border-2 border-emerald-500/20 rounded-2xl pointer-events-none"></div>
+              </div>
+              
+              {manualError && (
+                <p className="mb-3 text-xs font-bold text-rose-500 bg-rose-50 p-2.5 rounded-xl border border-rose-100">{manualError}</p>
+              )}
+              
+              <div className="space-y-4 mb-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Employee ID</label>
+                  <input 
+                    type="text" 
+                    placeholder="e.g. EPMN0001"
+                    value={manualEmpId}
+                    onChange={e => setManualEmpId(e.target.value)}
+                    className="w-full rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono uppercase"
+                    autoFocus
+                  />
+                </div>
+              </div>
+              
+              <Button type="submit" className="w-full bg-emerald-500 text-white hover:bg-emerald-600 border-none shadow-lg shadow-emerald-500/30 py-3" disabled={isManualLoading}>
+                {isManualLoading ? 'Checking in...' : 'Check In'}
+              </Button>
+            </form>
+          )}
 
           {statusMessage && (
             <div className={`mt-6 rounded-2xl p-4 text-center text-sm font-bold shadow-lg backdrop-blur-md transition-all ${

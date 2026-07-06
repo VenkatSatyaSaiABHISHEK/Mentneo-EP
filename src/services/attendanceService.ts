@@ -109,12 +109,14 @@ export const getAllAttendanceForEmployee = async (empId: string): Promise<Attend
  */
 export const cleanupOldImages = async () => {
   try {
-    const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000
-    // Query where timestampMs < oneDayAgo
+    const startOfToday = new Date()
+    startOfToday.setHours(0, 0, 0, 0)
+    const cutoffMs = startOfToday.getTime()
+    // Query where timestampMs < cutoffMs
     const snapshot = await getDocs(
       query(
         collection(db, ATTENDANCE_COLLECTION),
-        where('timestampMs', '<', oneDayAgo)
+        where('timestampMs', '<', cutoffMs)
       )
     )
 

@@ -283,9 +283,10 @@ export default function OfferLetterTemplate({ data, templateRef }: OfferLetterTe
 
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '40px' }}>
           <div className="new-signature-block">
+            <div className="signature-img">Abhiram Yeduru</div>
             <div className="sig-details">
               <strong>Abhiram Yeduru</strong><br/>
-              Founder, Mentneo
+              Founder
             </div>
           </div>
         </div>

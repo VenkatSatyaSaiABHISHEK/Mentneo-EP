@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { getFinancialData, saveFinancialData, deleteFinancialData, type FinancialData } from '../services/financialService'
 import { ResponsiveContainer, ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, Area, PieChart, Pie, Cell } from 'recharts'
 import Papa from 'papaparse'
@@ -31,6 +31,7 @@ export default function Analytics() {
   const [showPendingModal, setShowPendingModal] = useState(false)
   const [pendingClients, setPendingClients] = useState<Client[]>([])
   const [paymentInputs, setPaymentInputs] = useState<Record<string, number>>({})
+  const [selectedPendingMonth, setSelectedPendingMonth] = useState<string | null>(null)
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
 
   const [formData, setFormData] = useState({
@@ -296,6 +297,24 @@ export default function Analytics() {
     }
     html2pdf().set(opt).from(element).save()
   }
+  const pendingByMonth = useMemo(() => {
+    const groups: Record<string, { clients: Client[], total: number }> = {}
+    pendingClients.forEach(client => {
+      let monthName = 'Unknown Month'
+      if (client.createdAt) {
+        const date = new Date(client.createdAt)
+        if (!isNaN(date.getTime())) {
+          monthName = date.toLocaleDateString('default', { month: 'long', year: 'numeric' })
+        }
+      }
+      if (!groups[monthName]) {
+        groups[monthName] = { clients: [], total: 0 }
+      }
+      groups[monthName].clients.push(client)
+      groups[monthName].total += client.pendingAmount || 0
+    })
+    return groups
+  }, [pendingClients])
 
   const currentMonthData = data.filter(d => d.date.startsWith(selectedMonth))
 
@@ -1028,7 +1047,10 @@ export default function Analytics() {
           <div className="w-full max-w-2xl transform rounded-3xl bg-white p-8 shadow-2xl transition-all">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-bold text-slate-900">Manage Pending Collections</h2>
-              <button onClick={() => setShowPendingModal(false)} className="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition">
+              <button 
+                onClick={() => { setShowPendingModal(false); setSelectedPendingMonth(null); }} 
+                className="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition"
+              >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
@@ -1036,51 +1058,88 @@ export default function Analytics() {
             <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
               {pendingClients.length === 0 ? (
                 <p className="text-center text-slate-500 py-8">No pending collections found.</p>
-              ) : (
-                pendingClients.map(client => (
-                  <div key={client.id} className="flex items-center justify-between p-4 rounded-xl border border-slate-200 bg-slate-50">
-                    <div>
-                      <h4 className="font-bold text-slate-900">{client.clientName}</h4>
-                      <p className="text-xs text-slate-500">Current Pending: <span className="font-semibold text-rose-600">₹{(client.pendingAmount || 0).toLocaleString('en-IN')}</span></p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400">₹</span>
-                        <input 
-                          type="number"
-                          placeholder="Amount Paid"
-                          className="w-32 rounded-lg border-0 bg-white py-2 pl-6 pr-2 text-sm text-slate-900 shadow-sm ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-inset focus:ring-blue-500 outline-none"
-                          value={paymentInputs[client.id] || ''}
-                          onChange={(e) => setPaymentInputs({...paymentInputs, [client.id]: parseFloat(e.target.value) || 0})}
-                        />
+              ) : selectedPendingMonth === null ? (
+                // Grouped Month List
+                <div className="space-y-3">
+                  <p className="text-sm font-semibold text-slate-500 mb-2">Select a month to view pending clients:</p>
+                  {Object.entries(pendingByMonth).map(([month, group]) => (
+                    <button
+                      key={month}
+                      onClick={() => setSelectedPendingMonth(month)}
+                      className="w-full flex items-center justify-between p-5 rounded-2xl border border-slate-200 bg-slate-50 hover:bg-slate-100 hover:border-slate-300 transition text-left"
+                    >
+                      <div>
+                        <h4 className="font-bold text-slate-900 text-base">{month}</h4>
+                        <p className="text-xs text-slate-500 mt-1">{group.clients.length} {group.clients.length === 1 ? 'client' : 'clients'} pending</p>
                       </div>
-                      <button 
-                        onClick={async () => {
-                          const paidAmount = paymentInputs[client.id] || 0;
-                          if (paidAmount <= 0) return;
-                          const currentPending = client.pendingAmount || 0;
-                          const newPending = Math.max(0, currentPending - paidAmount);
-                          
-                          try {
-                            await updateClient(client.id, { pendingAmount: newPending });
-                            
-                            // Update local state
-                            setPendingClients(prev => prev.map(c => c.id === client.id ? { ...c, pendingAmount: newPending } : c).filter(c => (c.pendingAmount || 0) > 0));
-                            setTotalClientPending(prev => prev - (currentPending - newPending));
-                            setPaymentInputs({...paymentInputs, [client.id]: 0});
-                            alert('Pending amount updated successfully.');
-                          } catch (error) {
-                            console.error('Error updating pending amount:', error);
-                            alert('Failed to update pending amount.');
-                          }
-                        }}
-                        className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-700"
-                      >
-                        Update
-                      </button>
-                    </div>
+                      <div className="text-right">
+                        <span className="text-sm font-black text-rose-600 bg-rose-50 px-3 py-1.5 rounded-full border border-rose-100">
+                          ₹{group.total.toLocaleString('en-IN')}
+                        </span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                // Detailed People View for Selected Month
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 mb-4">
+                    <button 
+                      onClick={() => setSelectedPendingMonth(null)}
+                      className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-800 transition"
+                    >
+                      <svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
+                      Back to Months
+                    </button>
+                    <span className="text-slate-300">|</span>
+                    <span className="text-sm font-bold text-slate-700">{selectedPendingMonth}</span>
                   </div>
-                ))
+
+                  {pendingByMonth[selectedPendingMonth]?.clients.map(client => (
+                    <div key={client.id} className="flex items-center justify-between p-4 rounded-xl border border-slate-200 bg-slate-50">
+                      <div>
+                        <h4 className="font-bold text-slate-900">{client.clientName}</h4>
+                        <p className="text-xs text-slate-500">Current Pending: <span className="font-semibold text-rose-600">₹{(client.pendingAmount || 0).toLocaleString('en-IN')}</span></p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400">₹</span>
+                          <input 
+                            type="number"
+                            placeholder="Amount Paid"
+                            className="w-32 rounded-lg border-0 bg-white py-2 pl-6 pr-2 text-sm text-slate-900 shadow-sm ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-inset focus:ring-blue-500 outline-none"
+                            value={paymentInputs[client.id] || ''}
+                            onChange={(e) => setPaymentInputs({...paymentInputs, [client.id]: parseFloat(e.target.value) || 0})}
+                          />
+                        </div>
+                        <button 
+                          onClick={async () => {
+                            const paidAmount = paymentInputs[client.id] || 0;
+                            if (paidAmount <= 0) return;
+                            const currentPending = client.pendingAmount || 0;
+                            const newPending = Math.max(0, currentPending - paidAmount);
+                            
+                            try {
+                              await updateClient(client.id, { pendingAmount: newPending });
+                              
+                              // Update local state
+                              setPendingClients(prev => prev.map(c => c.id === client.id ? { ...c, pendingAmount: newPending } : c).filter(c => (c.pendingAmount || 0) > 0));
+                              setTotalClientPending(prev => prev - (currentPending - newPending));
+                              setPaymentInputs({...paymentInputs, [client.id]: 0});
+                              alert('Pending amount updated successfully.');
+                            } catch (error) {
+                              console.error('Error updating pending amount:', error);
+                              alert('Failed to update pending amount.');
+                            }
+                          }}
+                          className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-700"
+                        >
+                          Update
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           </div>

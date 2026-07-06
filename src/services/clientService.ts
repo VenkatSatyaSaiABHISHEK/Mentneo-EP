@@ -40,6 +40,7 @@ export const getAllClients = async (): Promise<Client[]> => {
       paymentPhotoUrl: data.paymentPhotoUrl || '',
       clientDataUrl: data.clientDataUrl || '',
       pendingAmount: Number(data.pendingAmount) || 0,
+      createdAt: data.createdAt ? (typeof data.createdAt.toDate === 'function' ? data.createdAt.toDate().toISOString() : data.createdAt) : undefined,
     } as Client
   })
 }
