@@ -14,8 +14,14 @@ import OfferLetterMaker from './pages/OfferLetterMaker'
 import InternOfferLetterMaker from './pages/InternOfferLetterMaker'
 import ClientData from './pages/ClientData'
 import Analytics from './pages/Analytics'
+import { MAINTENANCE_MODE } from './config'
+import Maintenance from './pages/Maintenance'
 
 function App() {
+  if (MAINTENANCE_MODE) {
+    return <Maintenance />
+  }
+
   return (
     <BrowserRouter>
       <Routes>
