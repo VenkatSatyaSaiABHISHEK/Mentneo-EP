@@ -94,7 +94,7 @@ export default function OfferLetterTemplate({ data, templateRef }: OfferLetterTe
           </div>
         </div>
 
-        <h1 className="main-title">OFFER OF APPOINTMENT</h1>
+        <h1 className="main-title">OFFER LETTER</h1>
 
         <div className="text-body">
           <p>
@@ -107,7 +107,7 @@ export default function OfferLetterTemplate({ data, templateRef }: OfferLetterTe
         <div className="text-body">
           <p className="text-bold" style={{ fontSize: '14px' }}>Dear {data.candidateName?.split(' ')[0] || 'Candidate'},</p>
           <p>
-            We are pleased to extend this offer of appointment for the position of <strong>{data.position || 'Position'}</strong> at MENTNEO. We were impressed with your qualifications, experience, and enthusiasm during the selection process and are excited about the potential you bring to our team.
+            We are pleased to extend this offer of employment for the position of <strong>{data.position || 'Position'}</strong> at MENTNEO. We were impressed with your qualifications, experience, and enthusiasm during the selection process and are excited about the potential you bring to our team.
           </p>
           <p>
             This offer is a formal confirmation of your selection, and the terms and details of your association with us are outlined below:
@@ -192,7 +192,7 @@ export default function OfferLetterTemplate({ data, templateRef }: OfferLetterTe
             MENTNEO
           </div>
           <div className="header-right">
-            Offer of Appointment<br />
+            Offer Letter<br />
             Page <strong>2</strong> of <strong>3</strong>
           </div>
         </div>
@@ -296,7 +296,7 @@ export default function OfferLetterTemplate({ data, templateRef }: OfferLetterTe
             MENTNEO
           </div>
           <div className="header-right">
-            Offer of Appointment<br />
+            Offer Letter<br />
             Page <strong>3</strong> of <strong>3</strong>
           </div>
         </div>
