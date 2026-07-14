@@ -73,7 +73,7 @@ export default function OfferLetterTemplate({ data, templateRef }: OfferLetterTe
 
   return (
     <div ref={templateRef} className="offer-letter-container">
-      
+
       {/* PAGE 1 */}
       <div className="offer-letter-page">
         <div className="page-header">
@@ -155,7 +155,7 @@ export default function OfferLetterTemplate({ data, templateRef }: OfferLetterTe
             MENTNEO
           </div>
           <div className="header-right">
-            Offer of Appointment<br/>
+            Offer of Appointment<br />
             Page <strong>2</strong> of <strong>3</strong>
           </div>
         </div>
@@ -238,7 +238,7 @@ export default function OfferLetterTemplate({ data, templateRef }: OfferLetterTe
             <div>
               <h4 style={{ margin: '0 0 5px 0', fontSize: '13px', fontWeight: 800, color: '#111827', textTransform: 'uppercase' }}>IMPORTANT</h4>
               <p style={{ margin: '0', fontSize: '12px', color: '#4B5563', lineHeight: '1.5' }}>
-                Please review this offer carefully.<br/>
+                Please review this offer carefully.<br />
                 Please sign and return a copy of this letter to confirm your acceptance.
               </p>
             </div>
@@ -259,7 +259,7 @@ export default function OfferLetterTemplate({ data, templateRef }: OfferLetterTe
             MENTNEO
           </div>
           <div className="header-right">
-            Offer of Appointment<br/>
+            Offer of Appointment<br />
             Page <strong>3</strong> of <strong>3</strong>
           </div>
         </div>
@@ -285,7 +285,7 @@ export default function OfferLetterTemplate({ data, templateRef }: OfferLetterTe
           <div className="new-signature-block">
             <div className="signature-img">Abhiram Yeduru</div>
             <div className="sig-details">
-              <strong>Abhiram Yeduru</strong><br/>
+              <strong>Abhiram Yeduru</strong><br />
               Founder
             </div>
           </div>

@@ -11,10 +11,10 @@ export default function InternOfferLetterMaker() {
   const [isSaving, setIsSaving] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
-  const [drafts, setDrafts] = useState<{id: string, name: string, date: string}[]>([]);
+  const [drafts, setDrafts] = useState<{ id: string, name: string, date: string }[]>([]);
   const [previewMode, setPreviewMode] = useState(false);
   const [bulkData, setBulkData] = useState<InternOfferLetterData[]>([]);
-  
+
   const templateRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -48,7 +48,7 @@ export default function InternOfferLetterMaker() {
         ...data,
         updatedAt: serverTimestamp()
       };
-      
+
       if (data.id) {
         // Update existing
         const docRef = doc(db, 'offerLetters', data.id);
@@ -75,16 +75,16 @@ export default function InternOfferLetterMaker() {
 
   const handleDownloadPDF = () => {
     if (!templateRef.current) return;
-    
+
     setIsExporting(true);
-    
+
     const element = templateRef.current;
     const opt = {
-      margin:       0,
-      filename:     `Offer_Letter_${data.candidateName.replace(/\s+/g, '_')}.pdf`,
-      image:        { type: 'jpeg' as const, quality: 0.98 },
-      html2canvas:  { scale: 2, useCORS: true, windowWidth: 794 },
-      jsPDF:        { unit: 'px' as const, format: [794, 1123] as [number, number], orientation: 'portrait' as const }
+      margin: 0,
+      filename: `Offer_Letter_${data.candidateName.replace(/\s+/g, '_')}.pdf`,
+      image: { type: 'jpeg' as const, quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true, windowWidth: 794 },
+      jsPDF: { unit: 'px' as const, format: [794, 1123] as [number, number], orientation: 'portrait' as const }
     };
 
     html2pdf().set(opt).from(element).save().then(() => {
@@ -94,8 +94,8 @@ export default function InternOfferLetterMaker() {
 
   const handleDownloadTemplate = () => {
     const headers = [
-      'candidateName', 'date', 'position', 'department', 
-      'employmentType', 'reportingTo', 'startDate', 
+      'candidateName', 'date', 'position', 'department',
+      'employmentType', 'reportingTo', 'startDate',
       'internEmail', 'templateId'
     ];
     const sampleData = [
@@ -103,7 +103,7 @@ export default function InternOfferLetterMaker() {
       'Internship', 'Jane Smith', '2023-11-01',
       'john@example.com', '1'
     ];
-    
+
     const csvContent = headers.join(',') + '\n' + sampleData.join(',');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -119,7 +119,7 @@ export default function InternOfferLetterMaker() {
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    
+
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
@@ -137,11 +137,11 @@ export default function InternOfferLetterMaker() {
           templateId: row.templateId || '1'
         }));
         setBulkData(mappedData);
-        
+
         if (mappedData.length > 0) {
           setData(prev => ({ ...prev, ...mappedData[0] }));
         }
-        
+
         e.target.value = '';
       }
     });
@@ -150,23 +150,23 @@ export default function InternOfferLetterMaker() {
   const generateBulkPDFs = async () => {
     if (bulkData.length === 0) return;
     setIsExporting(true);
-    
+
     const originalData = { ...data };
 
     for (let i = 0; i < bulkData.length; i++) {
       const item = bulkData[i];
       setData(prev => ({ ...prev, ...item }));
-      
+
       await new Promise(resolve => setTimeout(resolve, 800));
-      
+
       if (templateRef.current) {
         const element = templateRef.current;
         const opt = {
-          margin:       0,
-          filename:     `Offer_Letter_${item.candidateName?.replace(/\s+/g, '_') || `Candidate_${i+1}`}.pdf`,
-          image:        { type: 'jpeg' as const, quality: 0.98 },
-          html2canvas:  { scale: 2, useCORS: true, windowWidth: 794 },
-          jsPDF:        { unit: 'px' as const, format: [794, 1123] as [number, number], orientation: 'portrait' as const }
+          margin: 0,
+          filename: `Offer_Letter_${item.candidateName?.replace(/\s+/g, '_') || `Candidate_${i + 1}`}.pdf`,
+          image: { type: 'jpeg' as const, quality: 0.98 },
+          html2canvas: { scale: 2, useCORS: true, windowWidth: 794 },
+          jsPDF: { unit: 'px' as const, format: [794, 1123] as [number, number], orientation: 'portrait' as const }
         };
 
         try {
@@ -176,7 +176,7 @@ export default function InternOfferLetterMaker() {
         }
       }
     }
-    
+
     setData(originalData);
     setIsExporting(false);
     setSaveMessage(`Successfully generated ${bulkData.length} PDFs!`);
@@ -203,20 +203,20 @@ export default function InternOfferLetterMaker() {
           <p className="text-slate-500">Create, edit, and generate PDF offer letters.</p>
         </div>
         <div className="flex gap-3">
-          <button 
+          <button
             onClick={() => setPreviewMode(!previewMode)}
             className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition"
           >
             {previewMode ? 'Edit Mode' : 'Preview Mode'}
           </button>
-          <button 
+          <button
             onClick={handleSaveDraft}
             disabled={isSaving}
             className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 transition disabled:opacity-50"
           >
             {isSaving ? 'Saving...' : 'Save Draft'}
           </button>
-          <button 
+          <button
             onClick={handleDownloadPDF}
             disabled={isExporting}
             className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition disabled:opacity-50"
@@ -225,7 +225,7 @@ export default function InternOfferLetterMaker() {
           </button>
         </div>
       </div>
-      
+
       {/* BETA WARNING MESSAGE */}
       <div className="mb-6 rounded-lg border border-purple-200 bg-purple-50 p-4 shadow-sm">
         <div className="flex items-center">
@@ -237,7 +237,7 @@ export default function InternOfferLetterMaker() {
           </p>
         </div>
       </div>
-      
+
       {saveMessage && (
         <div className="mb-4 rounded-lg bg-green-50 p-3 text-sm text-green-700 border border-green-200">
           {saveMessage}
@@ -248,7 +248,7 @@ export default function InternOfferLetterMaker() {
         {/* Left Panel: Form */}
         {!previewMode && (
           <div className="w-1/3 flex flex-col gap-6 overflow-y-auto pr-2 pb-10 custom-scrollbar">
-            
+
             {/* Drafts Section */}
             {drafts.length > 0 && (
               <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -272,17 +272,17 @@ export default function InternOfferLetterMaker() {
             <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm flex flex-col gap-4">
               <h3 className="text-lg font-semibold text-slate-800">Bulk Generation (CSV)</h3>
               <p className="text-sm text-slate-500">Upload a CSV file to generate multiple offer letters at once.</p>
-              
+
               <div className="flex gap-3">
-                <button 
+                <button
                   onClick={handleDownloadTemplate}
                   className="flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition"
                 >
                   Download Template
                 </button>
                 <div className="flex-1 relative">
-                  <input 
-                    type="file" 
+                  <input
+                    type="file"
                     accept=".csv"
                     onChange={handleFileUpload}
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
@@ -296,7 +296,7 @@ export default function InternOfferLetterMaker() {
               {bulkData.length > 0 && (
                 <div className="mt-2 p-3 bg-blue-50 rounded-lg text-sm text-blue-800 border border-blue-100 flex justify-between items-center">
                   <span><strong>{bulkData.length}</strong> candidates loaded.</span>
-                  <button 
+                  <button
                     onClick={generateBulkPDFs}
                     disabled={isExporting}
                     className="rounded bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 transition disabled:opacity-50 whitespace-nowrap"
@@ -312,9 +312,9 @@ export default function InternOfferLetterMaker() {
               <h3 className="mb-4 text-lg font-semibold text-slate-800">Template Settings</h3>
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-medium text-slate-700">Select Template</label>
-                <select 
-                  name="templateId" 
-                  value={data.templateId} 
+                <select
+                  name="templateId"
+                  value={data.templateId}
                   onChange={handleInputChange}
                   className="w-full rounded-lg border border-slate-300 bg-slate-50 p-2.5 text-sm outline-none transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
                 >
@@ -328,7 +328,7 @@ export default function InternOfferLetterMaker() {
             {/* Page 1 Details */}
             <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm flex flex-col gap-4">
               <h3 className="text-lg font-semibold text-slate-800">Page 1: General Info</h3>
-              
+
               <div className="grid grid-cols-1 gap-4">
                 <InputField label="Candidate Name" name="candidateName" value={data.candidateName} onChange={handleInputChange} />
                 <InputField label="Date" name="date" type="date" value={data.date} onChange={handleInputChange} />
@@ -346,7 +346,7 @@ export default function InternOfferLetterMaker() {
               <h3 className="text-lg font-semibold text-slate-800">Page 2: Acceptance</h3>
               <div className="grid grid-cols-1 gap-4">
                 <div className="p-3 bg-blue-50 rounded-lg text-sm text-blue-800 border border-blue-100">
-                  <strong>Note:</strong> Signature Section is permanently set to HR Name: N. Sri Venkata Lalitha Jyothika, Role: HR Manager.
+                  <strong>Note:</strong> Signature Section is permanently set to HR Team .
                 </div>
               </div>
             </div>
