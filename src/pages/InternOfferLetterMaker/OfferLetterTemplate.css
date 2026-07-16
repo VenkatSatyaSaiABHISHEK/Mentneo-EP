@@ -335,13 +335,13 @@
 }
 
 .signature-img {
-  font-family: 'Dancing Script', cursive;
-  font-size: 32px;
-  color: #059669;
-  line-height: 1.2;
-  transform: rotate(-3deg);
-  margin-bottom: 12px;
-  margin-top: 5px;
+  height: 120px;
+  width: auto;
+  object-fit: contain;
+  mix-blend-mode: multiply;
+  margin-bottom: -30px;
+  margin-top: -30px;
+  margin-left: -15px;
 }
 
 .sig-details {

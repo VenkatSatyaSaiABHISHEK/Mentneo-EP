@@ -1,6 +1,7 @@
 import React from 'react';
 import './OfferLetterTemplate.css';
 import { InternOfferLetterData } from './types';
+import signatureImg from '../../assets/signature.png';
 
 interface OfferLetterTemplateProps {
   data: InternOfferLetterData;
@@ -284,7 +285,7 @@ export default function OfferLetterTemplate({ data, templateRef }: OfferLetterTe
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '40px' }}>
           <div className="new-signature-block">
             <div className="sig-watermark"></div>
-            <div className="signature-img">Abhiram Yeduru</div>
+            <img src={signatureImg} alt="Signature" className="signature-img" />
             <div className="sig-details">
               <strong>Abhiram Yeduru</strong><br />
               Founder
