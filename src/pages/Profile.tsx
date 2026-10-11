@@ -61,9 +61,11 @@ export default function Profile() {
         setAttendanceMethod(settings.attendanceMethod)
         if (loc) {
           setOfficeLocation(loc)
+          void updateOfficeLocation(loc).catch(() => {})
         }
         if (timing) {
           setTimingSettings(timing)
+          void updateAttendanceTimingSettings(timing).catch(() => {})
         }
       } catch (err) {
         console.error('Failed to load profile settings:', err)

@@ -72,19 +72,21 @@ export const getEmployees = async (): Promise<EmployeeRecord[]> => {
   const employeesRef = collection(db, EMPLOYEE_COLLECTION)
   const snapshot = await getDocs(query(employeesRef, orderBy('employeeId', 'asc')))
 
-  return snapshot.docs.map((docItem) => ({
-    id: docItem.id,
-    employeeId: docItem.data().employeeId,
-    name: docItem.data().name,
-    email: docItem.data().email,
-    phone: docItem.data().phone,
-    role: docItem.data().role,
-    salary: docItem.data().salary,
-    joinDate: docItem.data().joinDate,
-    qrUrl: docItem.data().qrUrl,
-    profileImageUrl: docItem.data().profileImageUrl,
-    password: docItem.data().password,
-  }))
+  return snapshot.docs
+    .filter((docItem) => !docItem.id.startsWith('__'))
+    .map((docItem) => ({
+      id: docItem.id,
+      employeeId: docItem.data().employeeId,
+      name: docItem.data().name,
+      email: docItem.data().email,
+      phone: docItem.data().phone,
+      role: docItem.data().role,
+      salary: docItem.data().salary,
+      joinDate: docItem.data().joinDate,
+      qrUrl: docItem.data().qrUrl,
+      profileImageUrl: docItem.data().profileImageUrl,
+      password: docItem.data().password,
+    }))
 }
 
 export const getEmployeeByEmployeeId = async (employeeId: string) => {

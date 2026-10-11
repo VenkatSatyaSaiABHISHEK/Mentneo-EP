@@ -17,9 +17,9 @@ export interface AttendanceTimingSettings {
 
 export const DEFAULT_TIMING_SETTINGS: AttendanceTimingSettings = {
   openTime: '08:00',
-  closeTime: '09:30',
+  closeTime: '12:30',
   enforceWindow: true,
-  onTimeCutoff: '09:30',
+  onTimeCutoff: '12:30',
   halfDayCutoff: '13:00',
   endOfDayCutoff: '19:00',
   photoRetentionDays: 30,
@@ -80,7 +80,22 @@ export const checkAttendanceWindowStatus = (
   }
 }
 
+// Special public mirror doc inside employees collection so unauthenticated employee PWAs have direct read access
+const PUBLIC_CONFIG_DOC = '__company_config__'
+
 export const getAttendanceTimingSettings = async (): Promise<AttendanceTimingSettings> => {
+  // 1. Try public readable config inside employees collection
+  try {
+    const pubRef = doc(db, 'employees', PUBLIC_CONFIG_DOC)
+    const pubSnap = await getDoc(pubRef)
+    if (pubSnap.exists() && pubSnap.data()?.timingSettings) {
+      return { ...DEFAULT_TIMING_SETTINGS, ...pubSnap.data().timingSettings } as AttendanceTimingSettings
+    }
+  } catch (err) {
+    // ignore
+  }
+
+  // 2. Try settings collection (available to authenticated admins)
   try {
     const docRef = doc(db, 'settings', 'attendance_timing')
     const docSnap = await getDoc(docRef)
@@ -88,7 +103,7 @@ export const getAttendanceTimingSettings = async (): Promise<AttendanceTimingSet
       return { ...DEFAULT_TIMING_SETTINGS, ...docSnap.data() } as AttendanceTimingSettings
     }
   } catch (err) {
-    console.error('Error getting timing settings:', err)
+    // console.error('Error getting timing settings:', err)
   }
   return DEFAULT_TIMING_SETTINGS
 }
@@ -96,18 +111,28 @@ export const getAttendanceTimingSettings = async (): Promise<AttendanceTimingSet
 export const subscribeToAttendanceTimingSettings = (
   callback: (settings: AttendanceTimingSettings) => void
 ): (() => void) => {
-  const docRef = doc(db, 'settings', 'attendance_timing')
+  // Listen to public config doc inside employees collection for live mobile updates
+  const pubRef = doc(db, 'employees', PUBLIC_CONFIG_DOC)
   return onSnapshot(
-    docRef,
-    (docSnap) => {
-      if (docSnap.exists()) {
-        callback({ ...DEFAULT_TIMING_SETTINGS, ...docSnap.data() } as AttendanceTimingSettings)
+    pubRef,
+    (pubSnap) => {
+      if (pubSnap.exists() && pubSnap.data()?.timingSettings) {
+        callback({ ...DEFAULT_TIMING_SETTINGS, ...pubSnap.data().timingSettings } as AttendanceTimingSettings)
       } else {
-        callback(DEFAULT_TIMING_SETTINGS)
+        // Fallback check settings collection
+        getDoc(doc(db, 'settings', 'attendance_timing'))
+          .then((docSnap) => {
+            if (docSnap.exists()) {
+              callback({ ...DEFAULT_TIMING_SETTINGS, ...docSnap.data() } as AttendanceTimingSettings)
+            } else {
+              callback(DEFAULT_TIMING_SETTINGS)
+            }
+          })
+          .catch(() => callback(DEFAULT_TIMING_SETTINGS))
       }
     },
     (err) => {
-      console.error('Error listening to timing settings:', err)
+      console.warn('Realtime timing listener error:', err)
       callback(DEFAULT_TIMING_SETTINGS)
     }
   )
@@ -116,8 +141,23 @@ export const subscribeToAttendanceTimingSettings = (
 export const updateAttendanceTimingSettings = async (
   settings: Partial<AttendanceTimingSettings>
 ): Promise<void> => {
-  const docRef = doc(db, 'settings', 'attendance_timing')
-  await setDoc(docRef, { ...settings, updatedAt: new Date().toISOString() }, { merge: true })
+  const payload = { ...settings, updatedAt: new Date().toISOString() }
+
+  // 1. Write to settings/attendance_timing
+  try {
+    const docRef = doc(db, 'settings', 'attendance_timing')
+    await setDoc(docRef, payload, { merge: true })
+  } catch (err) {
+    console.warn('Could not write to settings/attendance_timing:', err)
+  }
+
+  // 2. Mirror to employees/__company_config__ for unrestricted employee read access
+  try {
+    const pubRef = doc(db, 'employees', PUBLIC_CONFIG_DOC)
+    await setDoc(pubRef, { timingSettings: payload, updatedAt: new Date().toISOString() }, { merge: true })
+  } catch (err) {
+    console.warn('Could not mirror to employees/__company_config__:', err)
+  }
 }
 
 export interface OfficeLocation {
@@ -133,9 +173,9 @@ export interface OfficeLocation {
 export const DEFAULT_OFFICE_LOCATION: OfficeLocation = {
   officeName: 'Mentneo Headquarters',
   address: 'Mentneo Office Premises',
-  latitude: 16.964691,
-  longitude: 82.217716,
-  radiusMeters: 150,
+  latitude: 16.964702,
+  longitude: 82.217693,
+  radiusMeters: 660,
 }
 
 export const getKioskSettings = async (): Promise<KioskSettings> => {
@@ -157,6 +197,18 @@ export const updateKioskSettings = async (settings: KioskSettings): Promise<void
 }
 
 export const getOfficeLocation = async (): Promise<OfficeLocation> => {
+  // 1. Try public readable config inside employees collection
+  try {
+    const pubRef = doc(db, 'employees', PUBLIC_CONFIG_DOC)
+    const pubSnap = await getDoc(pubRef)
+    if (pubSnap.exists() && pubSnap.data()?.officeLocation) {
+      return { ...DEFAULT_OFFICE_LOCATION, ...pubSnap.data().officeLocation } as OfficeLocation
+    }
+  } catch (err) {
+    // ignore
+  }
+
+  // 2. Try settings collection
   try {
     const docRef = doc(db, 'settings', 'office_location')
     const docSnap = await getDoc(docRef)
@@ -170,15 +222,26 @@ export const getOfficeLocation = async (): Promise<OfficeLocation> => {
 }
 
 export const updateOfficeLocation = async (location: OfficeLocation): Promise<void> => {
-  const docRef = doc(db, 'settings', 'office_location')
-  await setDoc(
-    docRef,
-    {
-      ...location,
-      updatedAt: new Date().toISOString(),
-    },
-    { merge: true }
-  )
+  const payload = {
+    ...location,
+    updatedAt: new Date().toISOString(),
+  }
+
+  // 1. Write to settings/office_location
+  try {
+    const docRef = doc(db, 'settings', 'office_location')
+    await setDoc(docRef, payload, { merge: true })
+  } catch (err) {
+    console.warn('Could not write to settings/office_location:', err)
+  }
+
+  // 2. Mirror to employees/__company_config__
+  try {
+    const pubRef = doc(db, 'employees', PUBLIC_CONFIG_DOC)
+    await setDoc(pubRef, { officeLocation: payload, updatedAt: new Date().toISOString() }, { merge: true })
+  } catch (err) {
+    console.warn('Could not mirror to employees/__company_config__:', err)
+  }
 }
 
 /**

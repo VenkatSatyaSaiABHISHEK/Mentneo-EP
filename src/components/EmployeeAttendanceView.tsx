@@ -62,7 +62,6 @@ export default function EmployeeAttendanceView({
 }: EmployeeAttendanceViewProps) {
   // Indoor mode fallback bypass state
   const [indoorBypass, setIndoorBypass] = useState(false)
-  const [windowBypass, setWindowBypass] = useState(false)
   const [, setCurrentTimeTick] = useState(Date.now())
   const [isSyncingHours, setIsSyncingHours] = useState(false)
 
@@ -106,7 +105,7 @@ export default function EmployeeAttendanceView({
   const effectiveOffice = officeLocation || DEFAULT_OFFICE_LOCATION
   const effectiveIsInsideOffice = isInsideOffice === true || indoorBypass
   const windowStatus = checkAttendanceWindowStatus(liveTiming)
-  const isWindowClosed = Boolean(liveTiming.enforceWindow && !windowStatus.isOpen && !windowBypass)
+  const isWindowClosed = Boolean(liveTiming.enforceWindow && !windowStatus.isOpen)
 
   // Start camera when inside office (or indoor bypass) & not checked in & window is open (or bypassed)
   useEffect(() => {
@@ -261,14 +260,18 @@ export default function EmployeeAttendanceView({
         {/* Right: Operating Window Pill + Proximity Pill + GPS Refresh + History */}
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           {/* Operating Hours Window Pill */}
-          <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${
+          <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wide border shadow-sm ${
             windowStatus.isOpen 
-              ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' 
-              : 'bg-amber-50 text-amber-800 border border-amber-200'
+              ? 'bg-emerald-50 text-emerald-800 border-emerald-200' 
+              : 'bg-amber-50 text-amber-800 border-amber-200'
           }`}>
-            <Clock className="w-3 h-3 text-indigo-600 shrink-0" />
-            <span className="hidden xs:inline">{formatTime12Hour(liveTiming.openTime)} - {formatTime12Hour(liveTiming.closeTime)}</span>
-            <span className="xs:hidden">{windowStatus.isOpen ? 'Open' : 'Closed'}</span>
+            <Clock className={`w-3 h-3 ${windowStatus.isOpen ? 'text-emerald-600' : 'text-amber-600'} shrink-0`} />
+            <span className="hidden sm:inline">
+              {windowStatus.isOpen ? `Open (${formatTime12Hour(liveTiming.openTime)} - ${formatTime12Hour(liveTiming.closeTime)})` : `Closed (${formatTime12Hour(liveTiming.openTime)} - ${formatTime12Hour(liveTiming.closeTime)})`}
+            </span>
+            <span className="sm:hidden">
+              {windowStatus.isOpen ? 'Window Open' : 'Window Closed'}
+            </span>
           </span>
 
           {/* Proximity / Geofence Status Badge */}
@@ -391,19 +394,6 @@ export default function EmployeeAttendanceView({
                   <span>Back Home</span>
                 </button>
               </div>
-
-              {/* One-Tap Emergency / Test Window Bypass */}
-              <button
-                type="button"
-                onClick={() => {
-                  setWindowBypass(true)
-                  startCamera()
-                }}
-                className="w-full flex items-center justify-center gap-1.5 rounded-2xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 py-2.5 text-xs font-bold transition active:scale-95"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Bypass Window & Punch In</span>
-              </button>
             </div>
           </div>
         )}
