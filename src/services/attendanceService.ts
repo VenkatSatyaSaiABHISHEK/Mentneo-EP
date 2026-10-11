@@ -13,7 +13,7 @@ import {
 import { db } from './firebase'
 import type { AttendanceRecord } from '../types/attendance'
 import { compressImage } from '../utils/imageCompressor'
-import { getAttendanceTimingSettings } from './settingsService'
+import { getAttendanceTimingSettings, DEFAULT_TIMING_SETTINGS, checkAttendanceWindowStatus } from './settingsService'
 
 const ATTENDANCE_COLLECTION = 'attendance'
 
@@ -86,12 +86,15 @@ export const saveAttendance = async (payload: {
     })
 
   // Get current timing settings
-  const timingSettings = await getAttendanceTimingSettings().catch(() => ({
-    onTimeCutoff: '09:30',
-    halfDayCutoff: '13:00',
-    endOfDayCutoff: '19:00',
-    photoRetentionDays: 30,
-  }))
+  const timingSettings = await getAttendanceTimingSettings().catch(() => DEFAULT_TIMING_SETTINGS)
+
+  // Enforce operating hours window if enabled
+  if (timingSettings.enforceWindow) {
+    const windowStatus = checkAttendanceWindowStatus(timingSettings)
+    if (!windowStatus.isOpen) {
+      throw new Error(`Attendance is currently closed. ${windowStatus.message}`)
+    }
+  }
 
   const timeSlab = calculateTimeSlab(time, timingSettings.onTimeCutoff, timingSettings.halfDayCutoff)
 

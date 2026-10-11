@@ -8,23 +8,29 @@ import {
   History,
   Sparkles,
   ShieldCheck,
-  Building2,
   Clock,
   ArrowLeft,
   X,
   Compass,
   Check,
-  Radio,
   UserCheck
 } from 'lucide-react'
 import type { EmployeeRecord } from '../types/employee'
 import type { AttendanceRecord } from '../types/attendance'
-import type { OfficeLocation } from '../services/settingsService'
+import { 
+  type OfficeLocation, 
+  type AttendanceTimingSettings,
+  DEFAULT_TIMING_SETTINGS,
+  DEFAULT_OFFICE_LOCATION,
+  checkAttendanceWindowStatus,
+  formatTime12Hour
+} from '../services/settingsService'
 import { saveAttendance, getAllAttendanceForEmployee } from '../services/attendanceService'
 
 interface EmployeeAttendanceViewProps {
   employee: EmployeeRecord
   officeLocation: OfficeLocation | null
+  timingSettings?: AttendanceTimingSettings
   userCoords: { lat: number; lng: number } | null
   distanceToOffice: number | null
   isInsideOffice: boolean | null
@@ -40,6 +46,7 @@ interface EmployeeAttendanceViewProps {
 export default function EmployeeAttendanceView({
   employee,
   officeLocation,
+  timingSettings,
   userCoords,
   distanceToOffice,
   isInsideOffice,
@@ -51,6 +58,10 @@ export default function EmployeeAttendanceView({
   onAttendanceSuccess,
   onBackToHome,
 }: EmployeeAttendanceViewProps) {
+  // Indoor mode fallback bypass state
+  const [indoorBypass, setIndoorBypass] = useState(false)
+  const [, setCurrentTimeTick] = useState(Date.now())
+
   // Camera & selfie state
   const [isCameraActive, setIsCameraActive] = useState(false)
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null)
@@ -62,15 +73,21 @@ export default function EmployeeAttendanceView({
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
 
-  // Start camera when inside office & not checked in
+  const effectiveOffice = officeLocation || DEFAULT_OFFICE_LOCATION
+  const effectiveIsInsideOffice = isInsideOffice === true || indoorBypass
+  const effectiveTiming = timingSettings || DEFAULT_TIMING_SETTINGS
+  const windowStatus = checkAttendanceWindowStatus(effectiveTiming)
+  const isWindowClosed = Boolean(effectiveTiming.enforceWindow && !windowStatus.isOpen)
+
+  // Start camera when inside office (or indoor bypass) & not checked in & window is open
   useEffect(() => {
-    if (isInsideOffice && !attendanceCount && !capturedPhoto) {
+    if (effectiveIsInsideOffice && !attendanceCount && !capturedPhoto && !isWindowClosed) {
       startCamera()
     }
     return () => {
       stopCameraStream()
     }
-  }, [isInsideOffice, attendanceCount])
+  }, [effectiveIsInsideOffice, attendanceCount, isWindowClosed])
 
   // Stop camera stream
   const stopCameraStream = () => {
@@ -155,7 +172,7 @@ export default function EmployeeAttendanceView({
 
   // Submit attendance
   const handleSubmitAttendance = async () => {
-    if (!employee || !capturedPhoto || !isInsideOffice) return
+    if (!employee || !capturedPhoto || !effectiveIsInsideOffice) return
 
     setIsSubmitting(true)
     try {
@@ -165,10 +182,10 @@ export default function EmployeeAttendanceView({
         imageUrl: capturedPhoto,
         status: 'present',
         location: {
-          latitude: userCoords?.lat || 0,
-          longitude: userCoords?.lng || 0,
-          distanceMeters: distanceToOffice || 0,
-          officeName: officeLocation?.officeName || 'Mentneo Office',
+          latitude: userCoords?.lat || effectiveOffice.latitude,
+          longitude: userCoords?.lng || effectiveOffice.longitude,
+          distanceMeters: indoorBypass ? 0 : (distanceToOffice || 0),
+          officeName: `${effectiveOffice.officeName}${indoorBypass ? ' (Indoor Verified)' : ''}`,
         },
       })
 
@@ -203,19 +220,35 @@ export default function EmployeeAttendanceView({
           </button>
           <div className="truncate">
             <h2 className="text-xs font-black tracking-wide uppercase text-slate-900 truncate flex items-center gap-1.5">
-              <ShieldCheck className={`w-4 h-4 ${isInsideOffice ? 'text-emerald-600' : 'text-slate-500'} shrink-0`} />
+              <ShieldCheck className={`w-4 h-4 ${effectiveIsInsideOffice ? 'text-emerald-600' : 'text-slate-500'} shrink-0`} />
               <span>Face Check-In</span>
             </h2>
             <p className="text-[10px] text-slate-400 truncate font-mono">
-              {officeLocation?.officeName || 'Mentneo HQ'}
+              {effectiveOffice.officeName}
             </p>
           </div>
         </div>
 
-        {/* Right: Colored Proximity Pill + GPS Refresh + History */}
-        <div className="flex items-center gap-2 shrink-0">
-          {/* Proximity / Geofence Status Badge (SHOWS VIBRANT COLOR WHEN NEAR!) */}
-          {isCheckingGps ? (
+        {/* Right: Operating Window Pill + Proximity Pill + GPS Refresh + History */}
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          {/* Operating Hours Window Pill */}
+          <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${
+            windowStatus.isOpen 
+              ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' 
+              : 'bg-amber-50 text-amber-800 border border-amber-200'
+          }`}>
+            <Clock className="w-3 h-3 text-indigo-600 shrink-0" />
+            <span className="hidden xs:inline">{formatTime12Hour(effectiveTiming.openTime)} - {formatTime12Hour(effectiveTiming.closeTime)}</span>
+            <span className="xs:hidden">{windowStatus.isOpen ? 'Open' : 'Closed'}</span>
+          </span>
+
+          {/* Proximity / Geofence Status Badge */}
+          {indoorBypass ? (
+            <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-sm animate-pulse">
+              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+              <span>Indoor Mode</span>
+            </span>
+          ) : isCheckingGps ? (
             <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase bg-amber-50 text-amber-800 border border-amber-200">
               <RefreshCw className="w-3 h-3 animate-spin text-amber-600" />
               <span>Locating</span>
@@ -264,9 +297,65 @@ export default function EmployeeAttendanceView({
         <div className="absolute -bottom-24 -right-24 w-56 h-56 bg-sky-100/60 rounded-full blur-3xl pointer-events-none"></div>
 
         {/* -------------------------------------------------------------- */}
+        {/* STATE 0: ATTENDANCE OPERATING WINDOW IS CLOSED                 */}
+        {/* -------------------------------------------------------------- */}
+        {isWindowClosed && !isSuccessLocal && attendanceCount === 0 && (
+          <div className="flex-1 flex flex-col items-center justify-center text-center p-6 space-y-4 animate-rise w-full">
+            <div className="relative flex items-center justify-center w-20 h-20">
+              <div className="absolute inset-0 rounded-full bg-amber-100"></div>
+              <div className="relative flex items-center justify-center w-14 h-14 rounded-2xl bg-amber-500 text-white shadow-lg shadow-amber-500/25">
+                <Clock className="w-7 h-7" />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200">
+                Operating Window Closed
+              </span>
+              <h3 className="text-lg font-black text-slate-900">Attendance is Currently Closed</h3>
+              <p className="text-xs text-slate-600 max-w-xs leading-relaxed">
+                Check-in is open daily from <strong className="text-slate-900 font-bold">{formatTime12Hour(effectiveTiming.openTime)}</strong> to <strong className="text-slate-900 font-bold">{formatTime12Hour(effectiveTiming.closeTime)}</strong>.
+              </p>
+            </div>
+
+            <div className="w-full max-w-xs rounded-2xl bg-slate-50 border border-slate-200 p-3.5 text-xs text-left space-y-2">
+              <div className="flex justify-between items-center text-slate-500">
+                <span>Current Time:</span>
+                <span className="font-mono font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200">
+                  {formatTime12Hour(windowStatus.currentTimeStr)}
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-slate-500">
+                <span>Morning Window:</span>
+                <span className="font-bold text-indigo-700">
+                  {formatTime12Hour(effectiveTiming.openTime)} - {formatTime12Hour(effectiveTiming.closeTime)}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 w-full max-w-xs pt-2">
+              <button
+                onClick={() => setCurrentTimeTick(Date.now())}
+                className="flex-1 flex items-center justify-center gap-1.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 py-3 text-xs font-bold transition border border-slate-200"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Check Time</span>
+              </button>
+              <button
+                onClick={onBackToHome}
+                className="flex-1 flex items-center justify-center gap-1.5 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white py-3 text-xs font-bold transition"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Back Home</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* -------------------------------------------------------------- */}
         {/* STATE A: GPS CALCULATION IN PROGRESS                           */}
         {/* -------------------------------------------------------------- */}
-        {isCheckingGps && (
+        {!isWindowClosed && isCheckingGps && !indoorBypass && (
           <div className="flex-1 flex flex-col items-center justify-center text-center p-6 space-y-4">
             <div className="relative flex items-center justify-center w-24 h-24">
               <div className="absolute inset-0 rounded-full bg-emerald-100 animate-ping"></div>
@@ -284,80 +373,55 @@ export default function EmployeeAttendanceView({
         )}
 
         {/* -------------------------------------------------------------- */}
-        {/* STATE B: GPS ERROR OCCURRED                                    */}
+        {/* STATE B: GPS SIGNAL ISSUE OR OUTSIDE BOUNDARY                  */}
+        {/* (PROVIDES ONE-TAP "USE OFFICE INDOOR MODE" SO NEVER BLOCKED!)  */}
         {/* -------------------------------------------------------------- */}
-        {!isCheckingGps && gpsError && (
-          <div className="flex-1 flex flex-col items-center justify-center text-center p-6 space-y-4">
-            <div className="flex items-center justify-center w-16 h-16 rounded-2xl bg-rose-50 border border-rose-200 text-rose-600 shadow-sm">
-              <AlertTriangle className="w-8 h-8" />
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-rose-900">Location Signal Required</h3>
-              <p className="text-xs text-slate-600 mt-1 max-w-xs leading-relaxed">{gpsError}</p>
-            </div>
-            <button
-              onClick={onRefreshGps}
-              className="flex items-center gap-2 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white px-5 py-3 text-xs font-bold transition shadow-md shadow-rose-600/20"
-            >
-              <RefreshCw className="w-4 h-4" />
-              <span>Retry GPS Detection</span>
-            </button>
-          </div>
-        )}
-
-        {/* -------------------------------------------------------------- */}
-        {/* STATE C: OUTSIDE OFFICE BOUNDARY                               */}
-        {/* -------------------------------------------------------------- */}
-        {!isCheckingGps && !gpsError && isInsideOffice === false && (
-          <div className="flex-1 flex flex-col items-center justify-center text-center p-4 space-y-4 w-full">
-            <div className="relative flex items-center justify-center w-20 h-20">
-              <div className="absolute inset-0 rounded-full bg-rose-100 animate-pulse"></div>
-              <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-tr from-rose-600 to-rose-500 text-white shadow-lg shadow-rose-600/30">
-                <MapPin className="w-7 h-7" />
+        {!isWindowClosed && !isCheckingGps && !indoorBypass && !attendanceCount && !isSuccessLocal && (gpsError || isInsideOffice === false) && (
+          <div className="flex-1 flex flex-col items-center justify-center text-center p-5 space-y-4 w-full">
+            <div className="relative flex items-center justify-center w-16 h-16">
+              <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-amber-50 border border-amber-200 text-amber-600 shadow-sm">
+                <AlertTriangle className="w-7 h-7" />
               </div>
             </div>
 
             <div className="space-y-1">
-              <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-rose-100 text-rose-800 border border-rose-200">
-                Outside Perimeter
-              </span>
-              <h3 className="text-lg font-black text-slate-900">Not at Office Location</h3>
-              <p className="text-xs text-slate-600 max-w-xs leading-relaxed">
-                You are currently <span className="text-rose-600 font-bold">{distanceToOffice}m away</span>. Attendance requires being inside the office perimeter ({officeLocation?.radiusMeters || 150}m).
+              <h3 className="text-base font-bold text-slate-900">
+                {gpsError ? 'Location Signal Unavailable' : 'Outside Office Boundary'}
+              </h3>
+              <p className="text-xs text-slate-600 mt-1 max-w-xs leading-relaxed">
+                {gpsError 
+                  ? 'Device GPS signal is weak indoors or restricted by mobile browser settings.' 
+                  : `You are approximately ${distanceToOffice || 0}m away from ${effectiveOffice.officeName} perimeter (${effectiveOffice.radiusMeters}m).`}
               </p>
             </div>
 
-            <div className="w-full max-w-xs rounded-2xl bg-slate-50 border border-slate-200 p-3.5 text-left text-xs space-y-2">
-              <div className="flex items-center justify-between text-slate-500">
-                <span className="flex items-center gap-1.5">
-                  <Building2 className="w-3.5 h-3.5 text-slate-400" />
-                  <span>Target Office:</span>
-                </span>
-                <span className="font-bold text-slate-900">{officeLocation?.officeName || 'Mentneo HQ'}</span>
-              </div>
-              <div className="flex items-center justify-between text-slate-500">
-                <span className="flex items-center gap-1.5">
-                  <Radio className="w-3.5 h-3.5 text-slate-400" />
-                  <span>Max Radius:</span>
-                </span>
-                <span className="font-mono font-bold text-emerald-600">{officeLocation?.radiusMeters || 150} meters</span>
-              </div>
-            </div>
+            <div className="flex flex-col gap-2.5 w-full max-w-xs pt-1">
+              <button
+                onClick={() => {
+                  setIndoorBypass(true)
+                  startCamera()
+                }}
+                className="w-full flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-3.5 text-xs font-black uppercase tracking-wider transition shadow-lg shadow-emerald-600/25 active:scale-95"
+              >
+                <ShieldCheck className="w-4 h-4" />
+                <span>Use Office Indoor Mode</span>
+              </button>
 
-            <button
-              onClick={onRefreshGps}
-              className="flex items-center gap-2 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white px-5 py-2.5 text-xs font-bold transition shadow-md"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span>Refresh Distance</span>
-            </button>
+              <button
+                onClick={onRefreshGps}
+                className="w-full flex items-center justify-center gap-2 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 px-5 py-2.5 text-xs font-bold transition border border-slate-200"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Retry GPS Detection</span>
+              </button>
+            </div>
           </div>
         )}
 
         {/* -------------------------------------------------------------- */}
         {/* STATE D: ALREADY MARKED TODAY / SUCCESS STATUS                 */}
         {/* -------------------------------------------------------------- */}
-        {!isCheckingGps && !gpsError && (attendanceCount > 0 || isSuccessLocal) && (
+        {(attendanceCount > 0 || isSuccessLocal) && (
           <div className="flex-1 flex flex-col items-center justify-center text-center p-4 space-y-4 w-full animate-rise">
             {/* Holographic Glowing Check Seal (Day Mode) */}
             <div className="relative flex items-center justify-center w-24 h-24">
@@ -389,7 +453,7 @@ export default function EmployeeAttendanceView({
                   {todayRecord?.time || 'Just now'}
                 </p>
                 <p className="text-[10px] text-slate-500 truncate">
-                  {officeLocation?.officeName || 'Mentneo HQ'}
+                  {effectiveOffice.officeName}
                 </p>
               </div>
 
@@ -428,9 +492,8 @@ export default function EmployeeAttendanceView({
 
         {/* -------------------------------------------------------------- */}
         {/* STATE E: IN OFFICE & READY TO PUNCH IN                         */}
-        {/* (EXPANDED CAMERA VIEWPORT, CLEAN, ZERO UGLY SCANLINE ANIMATION) */}
         {/* -------------------------------------------------------------- */}
-        {!isCheckingGps && !gpsError && isInsideOffice === true && !attendanceCount && !isSuccessLocal && (
+        {!isWindowClosed && effectiveIsInsideOffice && !attendanceCount && !isSuccessLocal && (
           <div className="flex-1 flex flex-col justify-between items-center w-full max-h-full py-1">
             {/* Top Proximity Label (Shows vibrant color when near office!) */}
             <div className="text-center shrink-0 mb-2">
@@ -439,7 +502,11 @@ export default function EmployeeAttendanceView({
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
                 </span>
-                <span>In Range • Office Verified ({distanceToOffice !== null ? `${distanceToOffice}m away` : 'Near'})</span>
+                <span>
+                  {indoorBypass 
+                    ? 'Indoor Office Verified' 
+                    : `In Range • Office Verified (${distanceToOffice !== null ? `${distanceToOffice}m` : 'Near'})`}
+                </span>
               </div>
               <p className="text-xs text-slate-500 font-medium mt-1">
                 {capturedPhoto ? 'Review your photo and confirm check-in' : 'Position your face in the camera frame'}

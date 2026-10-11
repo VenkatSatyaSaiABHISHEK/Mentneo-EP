@@ -12,7 +12,12 @@ import {
 import { 
   getOfficeLocation, 
   calculateDistanceMeters, 
-  type OfficeLocation 
+  getAttendanceTimingSettings,
+  DEFAULT_TIMING_SETTINGS,
+  checkAttendanceWindowStatus,
+  formatTime12Hour,
+  type OfficeLocation,
+  type AttendanceTimingSettings 
 } from '../services/settingsService'
 import { getTasksForRole, getTasksForEmployee } from '../services/taskService'
 import EmployeeTaskModule from '../components/EmployeeTaskModule'
@@ -81,6 +86,7 @@ export default function EmployeeApp({ initialTab }: EmployeeAppProps = {}) {
 
   // Geolocation & Attendance State
   const [officeLocation, setOfficeLocation] = useState<OfficeLocation | null>(null)
+  const [timingSettings, setTimingSettings] = useState<AttendanceTimingSettings>(DEFAULT_TIMING_SETTINGS)
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null)
   const [distanceToOffice, setDistanceToOffice] = useState<number | null>(null)
   const [gpsError, setGpsError] = useState<string | null>(null)
@@ -183,18 +189,19 @@ export default function EmployeeApp({ initialTab }: EmployeeAppProps = {}) {
     void initAuth()
   }, [paramEmployeeId])
 
-  // Load employee data (tasks, attendance, QR code, office settings)
+  // Load employee data (tasks, attendance, QR code, office settings, operating hours)
   useEffect(() => {
     if (!employee) return
 
     const loadEmpData = async () => {
       try {
-        const [officeLoc, count, roleTasks, empTasks, history] = await Promise.all([
+        const [officeLoc, count, roleTasks, empTasks, history, timings] = await Promise.all([
           getOfficeLocation(),
           getAttendanceCountForEmployee(employee.employeeId, todayKey).catch(() => 0),
           getTasksForRole(employee.role).catch(() => []),
           getTasksForEmployee(employee.employeeId).catch(() => []),
-          getAllAttendanceForEmployee(employee.employeeId).catch(() => [])
+          getAllAttendanceForEmployee(employee.employeeId).catch(() => []),
+          getAttendanceTimingSettings().catch(() => DEFAULT_TIMING_SETTINGS)
         ])
 
         setOfficeLocation(officeLoc)
@@ -202,6 +209,7 @@ export default function EmployeeApp({ initialTab }: EmployeeAppProps = {}) {
         setTasks(roleTasks)
         setHasNewTasks(empTasks.some((t) => t.status === 'New'))
         setAttendanceHistory(history)
+        setTimingSettings(timings)
 
         // Generate Attendance QR Code
         const qrUrl = await QRCode.toDataURL(employee.employeeId, {
@@ -263,7 +271,7 @@ export default function EmployeeApp({ initialTab }: EmployeeAppProps = {}) {
     setAuthError('')
   }
 
-  // Request & Calculate Geolocation
+  // Request & Calculate Geolocation with robust mobile fallbacks
   const checkCurrentLocation = () => {
     if (!navigator.geolocation) {
       setGpsError('Geolocation is not supported by your mobile device or browser.')
@@ -273,44 +281,68 @@ export default function EmployeeApp({ initialTab }: EmployeeAppProps = {}) {
     setIsCheckingGps(true)
     setGpsError(null)
 
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const userLat = pos.coords.latitude
-        const userLng = pos.coords.longitude
-        setUserCoords({ lat: userLat, lng: userLng })
+    const processCoords = async (userLat: number, userLng: number) => {
+      setUserCoords({ lat: userLat, lng: userLng })
 
-        const office = officeLocation || (await getOfficeLocation())
-        if (!office) {
-          setGpsError('Office location is not configured by administrator yet.')
-          setIsCheckingGps(false)
+      const office = officeLocation || (await getOfficeLocation())
+      const distance = calculateDistanceMeters(
+        userLat,
+        userLng,
+        office.latitude,
+        office.longitude
+      )
+
+      setDistanceToOffice(Math.round(distance))
+      const allowedRadius = office.radiusMeters || 150
+      const inOffice = distance <= allowedRadius
+      setIsInsideOffice(inOffice)
+      setIsCheckingGps(false)
+    }
+
+    // Try high accuracy first, then fall back immediately to standard/cached accuracy if indoors
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        void processCoords(pos.coords.latitude, pos.coords.longitude)
+      },
+      (err) => {
+        // Fallback for indoor or satellite timeouts
+        if (err.code === 2 || err.code === 3) {
+          navigator.geolocation.getCurrentPosition(
+            (fallbackPos) => {
+              void processCoords(fallbackPos.coords.latitude, fallbackPos.coords.longitude)
+            },
+            (fallbackErr) => {
+              setIsCheckingGps(false)
+              let msg = 'Unable to acquire satellite GPS signal.'
+              if (fallbackErr.code === 1) {
+                msg = 'Location permission was denied. Please allow location in browser settings, or use Office Indoor Mode below.'
+              } else if (fallbackErr.code === 2) {
+                msg = 'GPS location unavailable. Please ensure location is enabled, or use Office Indoor Mode below.'
+              } else if (fallbackErr.code === 3) {
+                msg = 'Location request timed out. You can tap "Use Office Indoor Mode" below to proceed.'
+              }
+              setGpsError(msg)
+            },
+            {
+              enableHighAccuracy: false,
+              timeout: 10000,
+              maximumAge: 60000,
+            }
+          )
           return
         }
 
-        const distance = calculateDistanceMeters(
-          userLat,
-          userLng,
-          office.latitude,
-          office.longitude
-        )
-
-        setDistanceToOffice(Math.round(distance))
-        const allowedRadius = office.radiusMeters || 150
-        const inOffice = distance <= allowedRadius
-        setIsInsideOffice(inOffice)
         setIsCheckingGps(false)
-      },
-      (err) => {
-        setIsCheckingGps(false)
-        let msg = 'Unable to fetch your GPS position.'
-        if (err.code === 1) msg = 'Location permission was denied. Please allow location access in your browser settings.'
-        else if (err.code === 2) msg = 'GPS position unavailable. Please ensure GPS is turned on.'
-        else if (err.code === 3) msg = 'Location request timed out. Please tap refresh to try again.'
+        let msg = 'Location signal unavailable.'
+        if (err.code === 1) {
+          msg = 'Location permission was denied. Please allow location in browser settings, or use Office Indoor Mode below.'
+        }
         setGpsError(msg)
       },
       {
         enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 0,
+        timeout: 6000,
+        maximumAge: 30000,
       }
     )
   }
@@ -468,6 +500,7 @@ export default function EmployeeApp({ initialTab }: EmployeeAppProps = {}) {
           <EmployeeAttendanceView
             employee={employee}
             officeLocation={officeLocation}
+            timingSettings={timingSettings}
             userCoords={userCoords}
             distanceToOffice={distanceToOffice}
             isInsideOffice={isInsideOffice}
@@ -576,6 +609,20 @@ export default function EmployeeApp({ initialTab }: EmployeeAppProps = {}) {
                         ? 'Your presence has been confirmed by GPS & selfie.'
                         : 'Verify office coordinates & scan your selfie to punch in.'}
                     </p>
+                    {/* Operating Window Timing Indicator */}
+                    {(() => {
+                      const status = checkAttendanceWindowStatus(timingSettings)
+                      return (
+                        <div className="mt-2.5 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-white/20 backdrop-blur-sm border border-white/30 text-white">
+                          <span className={`h-1.5 w-1.5 rounded-full ${status.isOpen ? 'bg-emerald-300 animate-pulse' : 'bg-amber-300'}`}></span>
+                          <span>
+                            {status.isOpen
+                              ? `Window Open (${formatTime12Hour(timingSettings.openTime)} - ${formatTime12Hour(timingSettings.closeTime)})`
+                              : `Closed (Opens at ${formatTime12Hour(timingSettings.openTime)})`}
+                          </span>
+                        </div>
+                      )
+                    })()}
                   </div>
                   <button
                     onClick={() => setActiveTab('attendance')}
