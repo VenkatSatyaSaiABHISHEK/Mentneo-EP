@@ -1,4 +1,4 @@
-import { doc, getDoc, setDoc } from 'firebase/firestore'
+import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore'
 import { db } from './firebase'
 
 export interface KioskSettings {
@@ -91,6 +91,26 @@ export const getAttendanceTimingSettings = async (): Promise<AttendanceTimingSet
     console.error('Error getting timing settings:', err)
   }
   return DEFAULT_TIMING_SETTINGS
+}
+
+export const subscribeToAttendanceTimingSettings = (
+  callback: (settings: AttendanceTimingSettings) => void
+): (() => void) => {
+  const docRef = doc(db, 'settings', 'attendance_timing')
+  return onSnapshot(
+    docRef,
+    (docSnap) => {
+      if (docSnap.exists()) {
+        callback({ ...DEFAULT_TIMING_SETTINGS, ...docSnap.data() } as AttendanceTimingSettings)
+      } else {
+        callback(DEFAULT_TIMING_SETTINGS)
+      }
+    },
+    (err) => {
+      console.error('Error listening to timing settings:', err)
+      callback(DEFAULT_TIMING_SETTINGS)
+    }
+  )
 }
 
 export const updateAttendanceTimingSettings = async (

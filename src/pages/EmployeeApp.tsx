@@ -13,6 +13,7 @@ import {
   getOfficeLocation, 
   calculateDistanceMeters, 
   getAttendanceTimingSettings,
+  subscribeToAttendanceTimingSettings,
   DEFAULT_TIMING_SETTINGS,
   checkAttendanceWindowStatus,
   formatTime12Hour,
@@ -120,6 +121,14 @@ export default function EmployeeApp({ initialTab }: EmployeeAppProps = {}) {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstall)
       window.removeEventListener('appinstalled', handleAppInstalled)
     }
+  }, [])
+
+  // Real-time synchronization of attendance timing settings from Firestore
+  useEffect(() => {
+    const unsubscribe = subscribeToAttendanceTimingSettings((settings) => {
+      setTimingSettings(settings)
+    })
+    return () => unsubscribe()
   }, [])
 
   // Lockout countdown timer

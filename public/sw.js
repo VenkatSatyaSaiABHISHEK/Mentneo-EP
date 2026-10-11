@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mentneo-portal-v2'
+const CACHE_NAME = 'mentneo-portal-v3'
 const PRE_CACHE = ['/', '/index.html', '/favicon.svg', '/manifest.webmanifest']
 
 self.addEventListener('install', (event) => {
@@ -41,13 +41,11 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
+  // Network-first for application scripts, styles, and assets to prevent stale code in mobile PWA
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) {
-        return cached
-      }
-      return fetch(event.request).then((response) => {
-        if (!response || response.status !== 200 || response.type !== 'basic') {
+    fetch(event.request)
+      .then((response) => {
+        if (!response || response.status !== 200) {
           return response
         }
         const responseToCache = response.clone()
@@ -55,7 +53,7 @@ self.addEventListener('fetch', (event) => {
           cache.put(event.request, responseToCache)
         })
         return response
-      }).catch(() => caches.match('/'))
-    })
+      })
+      .catch(() => caches.match(event.request))
   )
 })

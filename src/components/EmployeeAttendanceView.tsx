@@ -23,7 +23,9 @@ import {
   DEFAULT_TIMING_SETTINGS,
   DEFAULT_OFFICE_LOCATION,
   checkAttendanceWindowStatus,
-  formatTime12Hour
+  formatTime12Hour,
+  subscribeToAttendanceTimingSettings,
+  getAttendanceTimingSettings
 } from '../services/settingsService'
 import { saveAttendance, getAllAttendanceForEmployee } from '../services/attendanceService'
 
@@ -60,7 +62,14 @@ export default function EmployeeAttendanceView({
 }: EmployeeAttendanceViewProps) {
   // Indoor mode fallback bypass state
   const [indoorBypass, setIndoorBypass] = useState(false)
+  const [windowBypass, setWindowBypass] = useState(false)
   const [, setCurrentTimeTick] = useState(Date.now())
+  const [isSyncingHours, setIsSyncingHours] = useState(false)
+
+  // Real-time timing settings state
+  const [liveTiming, setLiveTiming] = useState<AttendanceTimingSettings>(
+    timingSettings || DEFAULT_TIMING_SETTINGS
+  )
 
   // Camera & selfie state
   const [isCameraActive, setIsCameraActive] = useState(false)
@@ -73,13 +82,33 @@ export default function EmployeeAttendanceView({
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
 
+  // Sync prop changes
+  useEffect(() => {
+    if (timingSettings) {
+      setLiveTiming(timingSettings)
+    }
+  }, [timingSettings])
+
+  // Real-time Firestore snapshot subscription + live 1-second clock
+  useEffect(() => {
+    const unsub = subscribeToAttendanceTimingSettings((fresh) => {
+      setLiveTiming(fresh)
+    })
+    const timer = setInterval(() => {
+      setCurrentTimeTick(Date.now())
+    }, 1000)
+    return () => {
+      unsub()
+      clearInterval(timer)
+    }
+  }, [])
+
   const effectiveOffice = officeLocation || DEFAULT_OFFICE_LOCATION
   const effectiveIsInsideOffice = isInsideOffice === true || indoorBypass
-  const effectiveTiming = timingSettings || DEFAULT_TIMING_SETTINGS
-  const windowStatus = checkAttendanceWindowStatus(effectiveTiming)
-  const isWindowClosed = Boolean(effectiveTiming.enforceWindow && !windowStatus.isOpen)
+  const windowStatus = checkAttendanceWindowStatus(liveTiming)
+  const isWindowClosed = Boolean(liveTiming.enforceWindow && !windowStatus.isOpen && !windowBypass)
 
-  // Start camera when inside office (or indoor bypass) & not checked in & window is open
+  // Start camera when inside office (or indoor bypass) & not checked in & window is open (or bypassed)
   useEffect(() => {
     if (effectiveIsInsideOffice && !attendanceCount && !capturedPhoto && !isWindowClosed) {
       startCamera()
@@ -238,7 +267,7 @@ export default function EmployeeAttendanceView({
               : 'bg-amber-50 text-amber-800 border border-amber-200'
           }`}>
             <Clock className="w-3 h-3 text-indigo-600 shrink-0" />
-            <span className="hidden xs:inline">{formatTime12Hour(effectiveTiming.openTime)} - {formatTime12Hour(effectiveTiming.closeTime)}</span>
+            <span className="hidden xs:inline">{formatTime12Hour(liveTiming.openTime)} - {formatTime12Hour(liveTiming.closeTime)}</span>
             <span className="xs:hidden">{windowStatus.isOpen ? 'Open' : 'Closed'}</span>
           </span>
 
@@ -314,7 +343,7 @@ export default function EmployeeAttendanceView({
               </span>
               <h3 className="text-lg font-black text-slate-900">Attendance is Currently Closed</h3>
               <p className="text-xs text-slate-600 max-w-xs leading-relaxed">
-                Check-in is open daily from <strong className="text-slate-900 font-bold">{formatTime12Hour(effectiveTiming.openTime)}</strong> to <strong className="text-slate-900 font-bold">{formatTime12Hour(effectiveTiming.closeTime)}</strong>.
+                Check-in is open daily from <strong className="text-slate-900 font-bold">{formatTime12Hour(liveTiming.openTime)}</strong> to <strong className="text-slate-900 font-bold">{formatTime12Hour(liveTiming.closeTime)}</strong>.
               </p>
             </div>
 
@@ -326,27 +355,54 @@ export default function EmployeeAttendanceView({
                 </span>
               </div>
               <div className="flex justify-between items-center text-slate-500">
-                <span>Morning Window:</span>
+                <span>Allowed Window:</span>
                 <span className="font-bold text-indigo-700">
-                  {formatTime12Hour(effectiveTiming.openTime)} - {formatTime12Hour(effectiveTiming.closeTime)}
+                  {formatTime12Hour(liveTiming.openTime)} - {formatTime12Hour(liveTiming.closeTime)}
                 </span>
               </div>
             </div>
 
-            <div className="flex items-center gap-2 w-full max-w-xs pt-2">
+            <div className="flex flex-col gap-2.5 w-full max-w-xs pt-2">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setIsSyncingHours(true)
+                    try {
+                      const fresh = await getAttendanceTimingSettings()
+                      setLiveTiming(fresh)
+                      setCurrentTimeTick(Date.now())
+                    } finally {
+                      setIsSyncingHours(false)
+                    }
+                  }}
+                  disabled={isSyncingHours}
+                  className="flex-1 flex items-center justify-center gap-1.5 rounded-2xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 py-3 text-xs font-bold transition border border-indigo-200"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isSyncingHours ? 'animate-spin' : ''}`} />
+                  <span>{isSyncingHours ? 'Syncing...' : 'Sync Live Hours'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={onBackToHome}
+                  className="flex-1 flex items-center justify-center gap-1.5 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white py-3 text-xs font-bold transition"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Back Home</span>
+                </button>
+              </div>
+
+              {/* One-Tap Emergency / Test Window Bypass */}
               <button
-                onClick={() => setCurrentTimeTick(Date.now())}
-                className="flex-1 flex items-center justify-center gap-1.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 py-3 text-xs font-bold transition border border-slate-200"
+                type="button"
+                onClick={() => {
+                  setWindowBypass(true)
+                  startCamera()
+                }}
+                className="w-full flex items-center justify-center gap-1.5 rounded-2xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 py-2.5 text-xs font-bold transition active:scale-95"
               >
-                <RefreshCw className="w-3.5 h-3.5" />
-                <span>Check Time</span>
-              </button>
-              <button
-                onClick={onBackToHome}
-                className="flex-1 flex items-center justify-center gap-1.5 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white py-3 text-xs font-bold transition"
-              >
-                <ArrowLeft className="w-3.5 h-3.5" />
-                <span>Back Home</span>
+                <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Bypass Window & Punch In</span>
               </button>
             </div>
           </div>
