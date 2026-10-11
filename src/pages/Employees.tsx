@@ -14,6 +14,13 @@ import { useAuth } from '../context/AuthContext'
 import Papa from 'papaparse'
 // @ts-ignore
 import html2pdf from 'html2pdf.js'
+import {
+  Smartphone,
+  Share2,
+  Copy,
+  ExternalLink,
+  X
+} from 'lucide-react'
 
 export default function Employees() {
   const { user, isSuperAdmin } = useAuth()
@@ -21,6 +28,16 @@ export default function Employees() {
   const [isLoading, setIsLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState('All')
+
+  // App URL Hub display state (auto-hides after 30 seconds)
+  const [showAppHub, setShowAppHub] = useState(true)
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowAppHub(false)
+    }, 30000)
+    return () => clearTimeout(timer)
+  }, [])
   
   const [showAddForm, setShowAddForm] = useState(false)
   const [isAdding, setIsAdding] = useState(false)
@@ -253,10 +270,42 @@ export default function Employees() {
               {isGeneratingPdf && pdfEmployee?.id === row.id ? 'Downloading...' : 'Download Pass (PDF)'}
             </button>
           </div>
-          <div className="flex items-center gap-2 text-xs">
-            <span className="font-semibold text-slate-500">PWA:</span>
-            <a href={`/employee/${row.employeeId}`} target="_blank" rel="noreferrer" className="text-sky-500 hover:underline font-mono">
-              /app/{row.employeeId}
+          <div className="flex flex-wrap items-center justify-center gap-1.5 text-xs mt-1">
+            <span className="font-semibold text-slate-400 text-[10px] uppercase">App URL:</span>
+            <a
+              href={`/app/${row.employeeId}`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-sky-50 border border-sky-200 text-sky-700 hover:bg-sky-100 font-mono text-[11px] font-bold"
+              title="Open Employee Portal"
+            >
+              <span>/app/{row.employeeId}</span>
+              <ExternalLink className="w-3 h-3 text-sky-500" />
+            </a>
+
+            <button
+              type="button"
+              onClick={() => {
+                const url = `${window.location.origin}/app/${row.employeeId}`
+                navigator.clipboard.writeText(url)
+                alert(`App link copied for ${row.name}:\n${url}`)
+              }}
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-bold transition"
+              title="Copy link to clipboard"
+            >
+              <Copy className="w-3 h-3 text-slate-500" />
+              <span>Copy</span>
+            </button>
+
+            <a
+              href={`https://wa.me/?text=${encodeURIComponent(`Hello ${row.name}, here is your Mentneo Employee Portal login link:\n${window.location.origin}/app/${row.employeeId}\nPassword: ${row.password || 'N/A'}`)}`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-[10px] font-bold transition"
+              title="Share credentials on WhatsApp"
+            >
+              <Share2 className="w-3 h-3 text-emerald-600" />
+              <span>WhatsApp</span>
             </a>
           </div>
         </div>
@@ -406,18 +455,101 @@ export default function Employees() {
             </p>
           </div>
           
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            {!showAppHub && (
+              <button
+                type="button"
+                onClick={() => setShowAppHub(true)}
+                className="flex items-center gap-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-3 py-2 text-xs font-bold transition shadow-sm"
+                title="Show App URL and sharing options"
+              >
+                <Smartphone className="w-3.5 h-3.5" />
+                <span>📱 Share App</span>
+              </button>
+            )}
+
             {!isSuperAdmin && (
-              <Button variant="outline" onClick={() => setShowResetModal(true)} disabled={isResetting} className="text-rose-600 border-rose-200 hover:bg-rose-50">
+              <Button variant="outline" onClick={() => setShowResetModal(true)} disabled={isResetting} className="text-rose-600 border-rose-200 hover:bg-rose-50 text-xs py-2">
                 {isResetting ? 'Resetting...' : 'Security Reset (Passwords)'}
               </Button>
             )}
-            <Button onClick={() => setShowAddForm(!showAddForm)}>
+            <Button onClick={() => setShowAddForm(!showAddForm)} className="text-xs py-2">
               {showAddForm ? 'Cancel' : '+ Add Employee'}
             </Button>
           </div>
         </div>
       </Card>
+
+      {/* ============================================================= */}
+      {/* COMPACT APP URL BANNER (AUTO-HIDES AFTER 30S OR DISMISSABLE)   */}
+      {/* ============================================================= */}
+      {showAppHub && (
+        <div className="animate-rise rounded-2xl border border-emerald-200/90 bg-gradient-to-r from-emerald-50/70 via-white to-teal-50/40 p-3 shadow-sm">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="p-1.5 rounded-lg bg-emerald-600 text-white shrink-0 shadow-sm">
+                <Smartphone className="w-3.5 h-3.5" />
+              </span>
+              <div className="truncate">
+                <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                  <span className="font-bold text-slate-800">Employee App:</span>
+                  <span className="font-mono text-emerald-700 bg-white border border-emerald-200 px-2 py-0.5 rounded-md font-bold text-[11px]">
+                    {window.location.origin}/app
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-medium">(Auto-hides in 30s)</span>
+                </div>
+                <p className="text-[10px] text-slate-500 mt-0.5 truncate">
+                  Android: Chrome &rarr; Install App | iPhone: Safari &rarr; Add to Home Screen
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 shrink-0 w-full sm:w-auto justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  const url = `${window.location.origin}/app`
+                  navigator.clipboard.writeText(url)
+                  alert(`Portal URL copied:\n${url}`)
+                }}
+                className="flex items-center gap-1 rounded-lg bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 px-2.5 py-1 text-xs font-bold transition shadow-sm"
+              >
+                <Copy className="w-3 h-3 text-slate-500" />
+                <span>Copy</span>
+              </button>
+
+              <a
+                href={`https://wa.me/?text=${encodeURIComponent(`Install the Mentneo Employee Portal on your phone here: ${window.location.origin}/app`)}`}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 py-1 text-xs font-bold transition shadow-sm"
+              >
+                <Share2 className="w-3 h-3" />
+                <span>WhatsApp</span>
+              </a>
+
+              <a
+                href="/app"
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-white px-2.5 py-1 text-xs font-bold transition"
+              >
+                <span>Open</span>
+                <ExternalLink className="w-3 h-3 text-slate-400" />
+              </a>
+
+              <button
+                type="button"
+                onClick={() => setShowAppHub(false)}
+                className="p-1 rounded-lg hover:bg-slate-200/70 text-slate-400 hover:text-slate-700 transition ml-0.5"
+                title="Dismiss"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showAddForm && (
         <Card className="animate-rise border-sky-100 bg-sky-50/50">
@@ -748,21 +880,49 @@ export default function Employees() {
               </div>
             </div>
 
-            {/* Footer instructions */}
-            <div className="mt-4 pt-6 border-t border-slate-100 space-y-4">
-              <div className="bg-slate-50 rounded-2xl p-5 border border-slate-100 text-xs text-slate-600 leading-relaxed">
-                <h4 className="font-bold text-slate-800 uppercase tracking-wider mb-2">How to Access Your Portal:</h4>
-                <ol className="list-decimal list-inside space-y-1.5">
-                  <li>Open your mobile camera or any QR code scanner.</li>
-                  <li>Scan the QR code on the right, or visit the Portal Web Link on any browser.</li>
-                  <li>Enter your secure Portal Access Password shown above to unlock your account.</li>
-                  <li>Mark your attendance, view tasks, and check details directly from your portal.</li>
-                </ol>
+            {/* Comprehensive Feature & Onboarding Guide */}
+            <div className="mt-2 pt-4 border-t border-slate-100 space-y-3">
+              <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wider">
+                How It Works • Official Employee Portal Guide
+              </h4>
+
+              <div className="grid grid-cols-2 gap-3 text-[11px] text-slate-600 leading-relaxed">
+                {/* Step 1: PWA Installation */}
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 space-y-1">
+                  <span className="font-black text-slate-800 text-[11px] block">1. Install Mobile App (PWA)</span>
+                  <p>
+                    Open the link on your phone in <b>Chrome</b> (Android) and tap <b>"Install App"</b>, or in <b>Safari</b> (iPhone), tap the <b>Share icon</b> and select <b>"Add to Home Screen"</b>.
+                  </p>
+                </div>
+
+                {/* Step 2: Biometric Check-In */}
+                <div className="p-3.5 rounded-xl bg-emerald-50/60 border border-emerald-100 space-y-1">
+                  <span className="font-black text-emerald-950 text-[11px] block">2. Face & GPS Biometric Check-In</span>
+                  <p className="text-emerald-900">
+                    Be within office boundary (&lt;150m). Position face in camera frame and tap <b>"Take Selfie Photo"</b>. Check-in is verified instantly with high-precision GPS.
+                  </p>
+                </div>
+
+                {/* Step 3: Tasks & Docs */}
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 space-y-1">
+                  <span className="font-black text-slate-800 text-[11px] block">3. Company Docs & Daily Tasks</span>
+                  <p>
+                    Access role-specific guidelines, daily task checklists, and company PDF attachments directly from your mobile portal anytime.
+                  </p>
+                </div>
+
+                {/* Step 4: Salary & Attendance */}
+                <div className="p-3.5 rounded-xl bg-sky-50/60 border border-sky-100 space-y-1">
+                  <span className="font-black text-sky-950 text-[11px] block">4. Attendance-Linked Salary</span>
+                  <p className="text-sky-900">
+                    Real-time salary engine calculates deductions only on passed working days. Today is marked Pending, and upcoming days are never deducted.
+                  </p>
+                </div>
               </div>
 
-              <div className="flex items-center gap-2 text-[10px] font-semibold text-rose-500 uppercase tracking-wider">
-                <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-                Keep this document secure. Do not share your login credentials or QR code.
+              <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-[10px] text-slate-400">
+                <span className="font-mono">Direct Portal URL: {window.location.origin}/app/{pdfEmployee.employeeId}</span>
+                <span className="font-semibold text-rose-500 uppercase tracking-wider">🔒 Confidential • Official Company Document</span>
               </div>
             </div>
           </div>

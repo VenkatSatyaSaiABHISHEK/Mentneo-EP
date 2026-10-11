@@ -14,8 +14,11 @@ import OfferLetterMaker from './pages/OfferLetterMaker'
 import InternOfferLetterMaker from './pages/InternOfferLetterMaker'
 import ClientData from './pages/ClientData'
 import Analytics from './pages/Analytics'
+import Salary from './pages/Salary'
 import { MAINTENANCE_MODE } from './config'
 import Maintenance from './pages/Maintenance'
+
+import DemoTour from './pages/DemoTour'
 
 function App() {
   if (MAINTENANCE_MODE) {
@@ -47,16 +50,26 @@ function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/employees" element={<Employees />} />
           <Route path="/attendance" element={<Attendance />} />
+          <Route path="/salary" element={<Salary />} />
           <Route path="/tasks" element={<Tasks />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/offer-letters" element={<OfferLetterMaker />} />
           <Route path="/intern-offer-letters" element={<InternOfferLetterMaker />} />
           <Route path="/client-data" element={<ClientData />} />
           <Route path="/analytics" element={<Analytics />} />
+          <Route path="/demo" element={<DemoTour />} />
         </Route>
         
+        <Route path="/demo-walkthrough" element={<DemoTour />} />
+        
         <Route path="/employee/:employeeId" element={<EmployeeProfile />} />
+        <Route path="/app" element={<EmployeeApp />} />
+        <Route path="/app/attendance" element={<EmployeeApp initialTab="attendance" />} />
         <Route path="/app/:employeeId" element={<EmployeeApp />} />
+        <Route path="/app/:employeeId/attendance" element={<EmployeeApp initialTab="attendance" />} />
+        <Route path="/attendance-checkin" element={<EmployeeApp initialTab="attendance" />} />
+        <Route path="/attendance-checkin/:employeeId" element={<EmployeeApp initialTab="attendance" />} />
+        <Route path="/employee-login" element={<EmployeeApp />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

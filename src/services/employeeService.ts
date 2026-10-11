@@ -187,3 +187,20 @@ export const deleteEmployee = async (id: string) => {
   const docRef = doc(db, EMPLOYEE_COLLECTION, id)
   await writeBatch(db).delete(docRef).commit()
 }
+
+export const verifyEmployeeLogin = async (
+  employeeId: string,
+  password: string
+): Promise<EmployeeRecord> => {
+  const cleanId = employeeId.trim().toUpperCase()
+  const employee = await getEmployeeByEmployeeId(cleanId)
+  if (!employee) {
+    throw new Error(`Employee ID "${employeeId}" not found in the directory.`)
+  }
+  const validPassword = employee.password || '1234'
+  if (password.trim() !== validPassword) {
+    throw new Error('Incorrect password. Please verify and try again.')
+  }
+  return employee
+}
+

@@ -8,6 +8,7 @@ const allNavItems = [
   { label: 'Dashboard', path: '/' },
   { label: 'Employees', path: '/employees' },
   { label: 'Attendance', path: '/attendance' },
+  { label: 'Salary', path: '/salary' },
   { label: 'Tasks', path: '/tasks' },
   { label: 'Analytics', path: '/analytics' },
   { label: 'Profile', path: '/profile' },
@@ -23,8 +24,8 @@ export default function Topbar() {
   }
 
   const visibleNavItems = isSuperAdmin
-    ? allNavItems.filter(item => ['Employees', 'Attendance', 'Analytics', 'Profile'].includes(item.label))
-    : allNavItems.filter(item => ['Dashboard', 'Employees', 'Attendance', 'Tasks', 'Profile'].includes(item.label))
+    ? allNavItems.filter(item => ['Employees', 'Attendance', 'Salary', 'Analytics', 'Profile'].includes(item.label))
+    : allNavItems.filter(item => ['Dashboard', 'Employees', 'Attendance', 'Salary', 'Tasks', 'Profile'].includes(item.label))
 
   return (
     <header className="px-6 pt-6 md:px-8">

@@ -1,48 +1,122 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
-import { getAttendanceCountForEmployee, getTodayKey } from '../services/attendanceService'
-import { getEmployeeByEmployeeId } from '../services/employeeService'
+import { useParams, useLocation } from 'react-router-dom'
+import { 
+  getAttendanceCountForEmployee, 
+  getTodayKey, 
+  getAllAttendanceForEmployee 
+} from '../services/attendanceService'
+import { 
+  getEmployeeByEmployeeId, 
+  verifyEmployeeLogin 
+} from '../services/employeeService'
+import { 
+  getOfficeLocation, 
+  calculateDistanceMeters, 
+  type OfficeLocation 
+} from '../services/settingsService'
 import { getTasksForRole, getTasksForEmployee } from '../services/taskService'
 import EmployeeTaskModule from '../components/EmployeeTaskModule'
+import EmployeeAttendanceView from '../components/EmployeeAttendanceView'
 import type { EmployeeRecord } from '../types/employee'
 import type { TaskRecord } from '../types/task'
+import type { AttendanceRecord } from '../types/attendance'
 import QRCode from 'qrcode'
+import {
+  Home as HomeIcon,
+  ShieldCheck,
+  CheckSquare,
+  LogOut,
+  Smartphone,
+  Download,
+  Mail,
+  Phone,
+  Calendar,
+  IndianRupee,
+  FileText,
+  UserCheck,
+  Sparkles,
+  ArrowRight
+} from 'lucide-react'
 
-export default function EmployeeApp() {
-  const { employeeId } = useParams()
-  const navigate = useNavigate()
+const AUTH_STORAGE_KEY = 'mentneo_employee_session'
+
+interface EmployeeAppProps {
+  initialTab?: 'home' | 'attendance' | 'tasks'
+}
+
+export default function EmployeeApp({ initialTab }: EmployeeAppProps = {}) {
+  const { employeeId: paramEmployeeId } = useParams()
+  const location = useLocation()
+
+  // Determine initial active tab based on route or prop
+  const isDirectAttendance = 
+    initialTab === 'attendance' || 
+    location.pathname.includes('/attendance') ||
+    location.pathname.includes('/attendance-checkin')
+
+  // Employee state
   const [employee, setEmployee] = useState<EmployeeRecord | null>(null)
   const [tasks, setTasks] = useState<TaskRecord[]>([])
   const [attendanceCount, setAttendanceCount] = useState(0)
+  const [attendanceHistory, setAttendanceHistory] = useState<AttendanceRecord[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'home' | 'tasks'>('home')
+  const [activeTab, setActiveTab] = useState<'home' | 'attendance' | 'tasks'>(
+    isDirectAttendance ? 'attendance' : 'home'
+  )
   const [hasNewTasks, setHasNewTasks] = useState(false)
   const [qrCodeUrl, setQrCodeUrl] = useState('')
 
-  useEffect(() => {
-    if (employee) {
-      QRCode.toDataURL(employee.employeeId, {
-        margin: 1,
-        width: 300,
-        color: {
-          dark: '#0f172a',
-          light: '#ffffff'
-        }
-      }).then(url => {
-        setQrCodeUrl(url)
-      }).catch(err => {
-        console.error('Failed to generate attendance QR code:', err)
-      })
-    }
-  }, [employee])
-  
-  // Basic mock auth state
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [pin, setPin] = useState('')
+  // Login form state
+  const [loginEmpId, setLoginEmpId] = useState(paramEmployeeId || '')
+  const [loginPassword, setLoginPassword] = useState('')
   const [authError, setAuthError] = useState('')
+  const [isLoggingIn, setIsLoggingIn] = useState(false)
   const [failedAttempts, setFailedAttempts] = useState(0)
   const [lockoutTimeLeft, setLockoutTimeLeft] = useState(0)
 
+  // PWA Install Prompt State
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null)
+  const [isInstallable, setIsInstallable] = useState(false)
+  const [isInstalled, setIsInstalled] = useState(false)
+
+  // Geolocation & Attendance State
+  const [officeLocation, setOfficeLocation] = useState<OfficeLocation | null>(null)
+  const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null)
+  const [distanceToOffice, setDistanceToOffice] = useState<number | null>(null)
+  const [gpsError, setGpsError] = useState<string | null>(null)
+  const [isCheckingGps, setIsCheckingGps] = useState(false)
+  const [isInsideOffice, setIsInsideOffice] = useState<boolean | null>(null)
+
+  const todayKey = useMemo(() => getTodayKey(), [])
+
+  // Listen for PWA beforeinstallprompt event
+  useEffect(() => {
+    const handleBeforeInstall = (e: Event) => {
+      e.preventDefault()
+      setDeferredPrompt(e)
+      setIsInstallable(true)
+    }
+
+    const handleAppInstalled = () => {
+      setIsInstalled(true)
+      setIsInstallable(false)
+      setDeferredPrompt(null)
+    }
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstall)
+    window.addEventListener('appinstalled', handleAppInstalled)
+
+    if (window.matchMedia('(display-mode: standalone)').matches) {
+      setIsInstalled(true)
+    }
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstall)
+      window.removeEventListener('appinstalled', handleAppInstalled)
+    }
+  }, [])
+
+  // Lockout countdown timer
   useEffect(() => {
     let timer: number
     if (lockoutTimeLeft > 0) {
@@ -60,333 +134,686 @@ export default function EmployeeApp() {
     return () => clearInterval(timer)
   }, [lockoutTimeLeft])
 
-  const todayKey = useMemo(() => getTodayKey(), [])
-
+  // Check saved session or param on initial load
   useEffect(() => {
-    if (!employeeId) {
-      setIsLoading(false)
-      return
-    }
-
-    const loadData = async () => {
+    const initAuth = async () => {
       setIsLoading(true)
       try {
-        const record = await getEmployeeByEmployeeId(employeeId)
-        if (!record) {
-          setEmployee(null)
-          return
+        const savedSession = localStorage.getItem(AUTH_STORAGE_KEY)
+        let targetId = paramEmployeeId
+
+        if (!targetId && savedSession) {
+          try {
+            const parsed = JSON.parse(savedSession)
+            if (parsed?.employeeId) {
+              targetId = parsed.employeeId
+            }
+          } catch (e) {
+            console.error(e)
+          }
         }
 
-        setEmployee(record)
-                let count = 0
-        try { count = await getAttendanceCountForEmployee(record.employeeId, todayKey) } catch(e) { console.error(e) }
-        let roleTasks: TaskRecord[] = []
-        let empTasks: TaskRecord[] = []
-        try { 
-          roleTasks = await getTasksForRole(record.role)
-          empTasks = await getTasksForEmployee(record.employeeId)
-        } catch(e) { console.error(e) }
-        setAttendanceCount(count)
-        setTasks(roleTasks)
-        setHasNewTasks(empTasks.some(t => t.status === 'New'))
+        if (targetId) {
+          const emp = await getEmployeeByEmployeeId(targetId)
+          if (emp) {
+            if (savedSession) {
+              try {
+                const parsed = JSON.parse(savedSession)
+                if (parsed.employeeId === emp.employeeId && (parsed.password === (emp.password || '1234'))) {
+                  setEmployee(emp)
+                  setLoginEmpId(emp.employeeId)
+                } else {
+                  setLoginEmpId(emp.employeeId)
+                }
+              } catch {
+                setLoginEmpId(emp.employeeId)
+              }
+            } else {
+              setLoginEmpId(emp.employeeId)
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Auth initialization error:', err)
       } finally {
         setIsLoading(false)
       }
     }
 
-    void loadData()
-  }, [employeeId, todayKey])
+    void initAuth()
+  }, [paramEmployeeId])
 
-  const handleLogin = (e: React.FormEvent) => {
+  // Load employee data (tasks, attendance, QR code, office settings)
+  useEffect(() => {
+    if (!employee) return
+
+    const loadEmpData = async () => {
+      try {
+        const [officeLoc, count, roleTasks, empTasks, history] = await Promise.all([
+          getOfficeLocation(),
+          getAttendanceCountForEmployee(employee.employeeId, todayKey).catch(() => 0),
+          getTasksForRole(employee.role).catch(() => []),
+          getTasksForEmployee(employee.employeeId).catch(() => []),
+          getAllAttendanceForEmployee(employee.employeeId).catch(() => [])
+        ])
+
+        setOfficeLocation(officeLoc)
+        setAttendanceCount(count)
+        setTasks(roleTasks)
+        setHasNewTasks(empTasks.some((t) => t.status === 'New'))
+        setAttendanceHistory(history)
+
+        // Generate Attendance QR Code
+        const qrUrl = await QRCode.toDataURL(employee.employeeId, {
+          margin: 1,
+          width: 320,
+          color: { dark: '#0f172a', light: '#ffffff' }
+        })
+        setQrCodeUrl(qrUrl)
+      } catch (err) {
+        console.error('Error loading employee details:', err)
+      }
+    }
+
+    void loadEmpData()
+  }, [employee, todayKey])
+
+  // Handle Employee Login
+  const handleEmployeeLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!employee || lockoutTimeLeft > 0) return
-    const validPassword = employee.password || '1234'
-    if (pin === validPassword) {
-      setIsAuthenticated(true)
+    if (!loginEmpId.trim() || !loginPassword.trim() || lockoutTimeLeft > 0) return
+
+    setAuthError('')
+    setIsLoggingIn(true)
+
+    try {
+      const emp = await verifyEmployeeLogin(loginEmpId, loginPassword)
+      setEmployee(emp)
       setFailedAttempts(0)
-      setAuthError('')
-    } else {
+      
+      // Save session to localStorage for PWA persistent login
+      localStorage.setItem(
+        AUTH_STORAGE_KEY,
+        JSON.stringify({
+          employeeId: emp.employeeId,
+          password: loginPassword.trim(),
+          loginTime: new Date().toISOString()
+        })
+      )
+    } catch (err) {
       const newAttempts = failedAttempts + 1
       setFailedAttempts(newAttempts)
       if (newAttempts >= 3) {
         setLockoutTimeLeft(60)
         setAuthError('Too many failed attempts. Please wait 1 minute.')
-        setPin('')
+        setLoginPassword('')
       } else {
-        setAuthError(`Incorrect Password. ${3 - newAttempts} attempts left.`)
+        setAuthError(err instanceof Error ? err.message : 'Invalid Employee ID or Password')
       }
+    } finally {
+      setIsLoggingIn(false)
     }
   }
 
+  // Handle Employee Logout
+  const handleEmployeeLogout = () => {
+    localStorage.removeItem(AUTH_STORAGE_KEY)
+    setEmployee(null)
+    setLoginPassword('')
+    setAuthError('')
+  }
+
+  // Request & Calculate Geolocation
+  const checkCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      setGpsError('Geolocation is not supported by your mobile device or browser.')
+      return
+    }
+
+    setIsCheckingGps(true)
+    setGpsError(null)
+
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const userLat = pos.coords.latitude
+        const userLng = pos.coords.longitude
+        setUserCoords({ lat: userLat, lng: userLng })
+
+        const office = officeLocation || (await getOfficeLocation())
+        if (!office) {
+          setGpsError('Office location is not configured by administrator yet.')
+          setIsCheckingGps(false)
+          return
+        }
+
+        const distance = calculateDistanceMeters(
+          userLat,
+          userLng,
+          office.latitude,
+          office.longitude
+        )
+
+        setDistanceToOffice(Math.round(distance))
+        const allowedRadius = office.radiusMeters || 150
+        const inOffice = distance <= allowedRadius
+        setIsInsideOffice(inOffice)
+        setIsCheckingGps(false)
+      },
+      (err) => {
+        setIsCheckingGps(false)
+        let msg = 'Unable to fetch your GPS position.'
+        if (err.code === 1) msg = 'Location permission was denied. Please allow location access in your browser settings.'
+        else if (err.code === 2) msg = 'GPS position unavailable. Please ensure GPS is turned on.'
+        else if (err.code === 3) msg = 'Location request timed out. Please tap refresh to try again.'
+        setGpsError(msg)
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 0,
+      }
+    )
+  }
+
+  // Handle PWA Install CTA
+  const handleInstallPwa = async () => {
+    if (!deferredPrompt) return
+    deferredPrompt.prompt()
+    const { outcome } = await deferredPrompt.userChoice
+    if (outcome === 'accepted') {
+      setIsInstalled(true)
+      setIsInstallable(false)
+    }
+    setDeferredPrompt(null)
+  }
+
+  // Auto trigger GPS detection when employee is available or Attendance tab is active
+  useEffect(() => {
+    if (employee && !userCoords && !isCheckingGps) {
+      checkCurrentLocation()
+    }
+  }, [activeTab, employee])
+
+  // -------------------------------------------------------------
+  // 1. Loading Screen (Day Mode)
+  // -------------------------------------------------------------
   if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50">
-        <div className="flex flex-col items-center gap-4">
-          <div className="h-12 w-12 rounded-full border-4 border-emerald-500/20 border-t-emerald-500 animate-spin"></div>
-          <div className="text-sm font-bold tracking-widest text-emerald-500/60 uppercase">Loading Portal...</div>
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 text-slate-800">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-emerald-600"></div>
+          <p className="font-mono text-xs uppercase tracking-widest text-slate-400">
+            Loading Mentneo Portal...
+          </p>
         </div>
       </div>
     )
   }
 
+  // -------------------------------------------------------------
+  // 2. Employee Login Screen
+  // -------------------------------------------------------------
   if (!employee) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
-        <div className="w-full max-w-sm rounded-[2rem] bg-white p-10 text-center shadow-xl">
-          <h2 className="text-2xl font-bold text-slate-900">Account Not Found</h2>
-          <button onClick={() => navigate('/')} className="mt-6 w-full rounded-full bg-slate-900 py-3 text-sm font-bold text-white transition hover:bg-slate-800">
-            Return Home
-          </button>
-        </div>
-      </div>
-    )
-  }
+      <div className="flex min-h-screen flex-col items-center justify-center bg-slate-50 px-5 py-10 font-sans text-slate-900 selection:bg-emerald-500/30">
+        <div className="absolute top-0 left-0 right-0 h-96 bg-gradient-to-b from-sky-100/50 via-emerald-50/40 to-transparent pointer-events-none"></div>
 
-  if (!isAuthenticated) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
-        <div className="w-full max-w-md rounded-[2.5rem] bg-white p-10 shadow-2xl shadow-slate-200/50">
-          <div className="mb-8 flex flex-col items-center">
-            {employee.profileImageUrl ? (
-              <img src={employee.profileImageUrl} alt="" className="h-24 w-24 rounded-full object-cover shadow-lg border-4 border-white" />
-            ) : (
-              <div className="flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-slate-800 to-slate-900 text-4xl font-bold text-white shadow-lg">
-                {employee.name.charAt(0)}
-              </div>
-            )}
-            <h1 className="mt-6 text-2xl font-bold text-slate-900 tracking-tight">Welcome Back</h1>
-            <p className="mt-1 text-sm font-medium text-slate-500">Log in as {employee.name}</p>
-          </div>
-
-          <form onSubmit={handleLogin} className="space-y-6">
-            <div>
-              <input
-                type="password"
-                placeholder={lockoutTimeLeft > 0 ? `Locked for ${lockoutTimeLeft}s` : "Enter Secure Password"}
-                value={pin}
-                onChange={(e) => setPin(e.target.value)}
-                disabled={lockoutTimeLeft > 0}
-                className={`w-full rounded-2xl border-2 px-6 py-4 text-center text-lg tracking-[0.2em] transition-all shadow-inner focus:outline-none ${
-                  lockoutTimeLeft > 0 
-                    ? 'border-rose-200 bg-rose-50 text-rose-500 cursor-not-allowed placeholder-rose-400' 
-                    : 'border-slate-100 bg-slate-50 text-slate-900 focus:border-emerald-500 focus:bg-white'
-                }`}
-              />
+        <div className="relative z-10 w-full max-w-md rounded-[2.5rem] bg-white border border-slate-200/80 p-8 sm:p-10 shadow-2xl shadow-slate-200/60 animate-rise">
+          {/* Logo & Header */}
+          <div className="mb-8 flex flex-col items-center text-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-500 text-3xl font-black text-white shadow-lg shadow-emerald-500/25">
+              M
             </div>
-            {authError && <p className="text-center text-sm font-semibold text-rose-500 animate-pulse">{authError}</p>}
-            <button 
-              type="submit" 
-              disabled={lockoutTimeLeft > 0}
-              className={`w-full rounded-2xl py-4 text-sm font-bold text-white transition shadow-lg ${
-                lockoutTimeLeft > 0 
-                  ? 'bg-slate-400 cursor-not-allowed' 
-                  : 'bg-slate-900 hover:bg-slate-800 hover:-translate-y-1'
-              }`}
-            >
-              {lockoutTimeLeft > 0 ? `Try again in ${lockoutTimeLeft}s` : 'Unlock Portal'}
-            </button>
-          </form>
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div className="min-h-screen bg-slate-50 pb-24 font-sans text-slate-900 selection:bg-emerald-500/30">
-      
-      {/* Decorative Top Background */}
-      <div className="absolute top-0 left-0 right-0 h-[40vh] bg-gradient-to-b from-slate-900 to-slate-800 z-0 overflow-hidden rounded-b-[3rem] shadow-xl">
-        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay"></div>
-      </div>
-
-      <div className="relative z-10 mx-auto max-w-lg px-6 pt-12">
-        {/* Header Content */}
-        <div className="flex items-center justify-between text-white mb-10">
-          <div className="flex items-center gap-2">
-            <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></div>
-            <span className="font-bold tracking-widest text-xs uppercase text-slate-300">Mentneo App</span>
+            <h1 className="mt-5 text-2xl font-black tracking-tight text-slate-900">Employee Portal</h1>
+            <p className="mt-1.5 text-xs font-medium text-slate-500 max-w-xs">
+              Sign in with your Employee ID and password to access check-in & tasks.
+            </p>
           </div>
-          <button 
-            onClick={() => setIsAuthenticated(false)} 
-            className="rounded-full bg-white/10 px-4 py-2 text-xs font-bold text-white backdrop-blur-md transition hover:bg-white/20"
-          >
-            Logout
-          </button>
-        </div>
 
-        <div className="mb-12 flex items-center gap-5">
-          {employee.profileImageUrl ? (
-            <img src={employee.profileImageUrl} alt="" className="h-20 w-20 rounded-full object-cover border-2 border-white/20 shadow-xl" />
-          ) : (
-            <div className="flex h-20 w-20 items-center justify-center rounded-full border-2 border-white/20 bg-slate-800 text-3xl font-bold text-emerald-400 shadow-xl">
-              {employee.name.charAt(0)}
+          {/* PWA Install Banner on Login */}
+          {isInstallable && (
+            <div className="mb-6 flex items-center justify-between rounded-2xl bg-emerald-50 border border-emerald-200/80 p-3.5 shadow-sm">
+              <div className="flex items-center gap-2.5">
+                <Smartphone className="w-5 h-5 text-emerald-600" />
+                <div>
+                  <p className="text-xs font-bold text-emerald-900">Install Mentneo App</p>
+                  <p className="text-[10px] text-emerald-700">Add to home screen for quick access</p>
+                </div>
+              </div>
+              <button
+                onClick={handleInstallPwa}
+                className="flex items-center gap-1 rounded-xl bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 shadow-sm transition"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Install</span>
+              </button>
             </div>
           )}
-          <div className="text-white">
-            <h1 className="text-2xl lg:text-3xl font-bold tracking-tight">{employee.name}</h1>
-            <p className="text-sm font-medium text-emerald-400 uppercase tracking-wider">{employee.role}</p>
+
+          <form onSubmit={handleEmployeeLogin} className="space-y-4">
+            <div>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                Employee ID
+              </label>
+              <input
+                type="text"
+                required
+                placeholder="e.g. EPMN0001"
+                value={loginEmpId}
+                onChange={(e) => setLoginEmpId(e.target.value.toUpperCase())}
+                disabled={lockoutTimeLeft > 0 || isLoggingIn}
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-sm font-mono font-bold text-slate-900 placeholder-slate-400 focus:bg-white focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 shadow-inner transition"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                Password
+              </label>
+              <input
+                type="password"
+                required
+                placeholder={lockoutTimeLeft > 0 ? `Locked for ${lockoutTimeLeft}s` : "Enter your password"}
+                value={loginPassword}
+                onChange={(e) => setLoginPassword(e.target.value)}
+                disabled={lockoutTimeLeft > 0 || isLoggingIn}
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-sm font-semibold text-slate-900 placeholder-slate-400 focus:bg-white focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 shadow-inner transition"
+              />
+            </div>
+
+            {authError && (
+              <p className="text-center text-xs font-bold text-rose-600 bg-rose-50 border border-rose-200 rounded-xl p-2.5 animate-pulse">
+                {authError}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              disabled={lockoutTimeLeft > 0 || isLoggingIn}
+              className={`w-full rounded-2xl py-4 text-sm font-bold text-white transition shadow-lg ${
+                lockoutTimeLeft > 0 || isLoggingIn
+                  ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                  : 'bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] shadow-emerald-600/25'
+              }`}
+            >
+              {isLoggingIn
+                ? 'Authenticating...'
+                : lockoutTimeLeft > 0
+                ? `Locked (${lockoutTimeLeft}s)`
+                : 'Sign In to Portal'}
+            </button>
+          </form>
+
+          <div className="mt-6 text-center">
+            <p className="text-[11px] text-slate-400">
+              Need assistance? Contact your Mentneo HR department.
+            </p>
           </div>
         </div>
+      </div>
+    )
+  }
 
-        {/* Tab Content Rendering */}
-        {activeTab === 'home' ? (
-          <>
-            {/* Dashboard Grid */}
-            <div className="grid grid-cols-2 gap-4 mb-6">
-              <div className="rounded-[2rem] bg-white p-6 shadow-xl shadow-slate-200/50 flex flex-col items-center text-center">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">Work Days</p>
-                <p className="text-4xl font-black text-slate-900">24</p>
-                <p className="mt-1 text-[10px] font-bold text-emerald-500 uppercase">This Month</p>
+  // -------------------------------------------------------------
+  // 3. Authenticated Employee Dashboard & Zero-Scroll Attendance
+  // -------------------------------------------------------------
+  return (
+    <div className={`min-h-screen ${activeTab === 'attendance' ? 'bg-slate-100/70 overflow-hidden' : 'bg-slate-50 pb-28'} font-sans text-slate-900 selection:bg-emerald-500/30`}>
+      
+      {/* ========================================================= */}
+      {/* ATTENDANCE TAB: ZERO-SCROLL BIOMETRIC HUD TERMINAL        */}
+      {/* ========================================================= */}
+      {activeTab === 'attendance' ? (
+        <div className="h-[100dvh] max-h-[100dvh] p-3 pb-24 flex flex-col justify-between overflow-hidden">
+          <EmployeeAttendanceView
+            employee={employee}
+            officeLocation={officeLocation}
+            userCoords={userCoords}
+            distanceToOffice={distanceToOffice}
+            isInsideOffice={isInsideOffice}
+            isCheckingGps={isCheckingGps}
+            gpsError={gpsError}
+            onRefreshGps={checkCurrentLocation}
+            attendanceCount={attendanceCount}
+            attendanceHistory={attendanceHistory}
+            onAttendanceSuccess={(updatedHistory) => {
+              setAttendanceCount(1)
+              setAttendanceHistory(updatedHistory)
+            }}
+            onBackToHome={() => setActiveTab('home')}
+          />
+        </div>
+      ) : (
+        /* ========================================================= */
+        /* STANDARD OVERVIEW TABS (HOME & TASKS)                     */
+        /* ========================================================= */
+        <>
+          {/* Top Header Background Banner */}
+          <div className="absolute top-0 left-0 right-0 h-64 bg-gradient-to-b from-slate-900 to-slate-800 z-0 rounded-b-[2.5rem] shadow-xl"></div>
+
+          <div className="relative z-10 mx-auto max-w-lg px-5 pt-8">
+            {/* Top Navbar */}
+            <div className="flex items-center justify-between text-white mb-6">
+              <div className="flex items-center gap-2.5">
+                <div className="h-2.5 w-2.5 rounded-full bg-emerald-400 animate-pulse"></div>
+                <span className="font-mono text-xs font-bold tracking-widest text-slate-200 uppercase">
+                  Mentneo EP
+                </span>
               </div>
-              <div className="rounded-[2rem] bg-white p-6 shadow-xl shadow-slate-200/50 flex flex-col items-center text-center">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">Leave Bal.</p>
-                <p className="text-4xl font-black text-slate-900">12</p>
-                <p className="mt-1 text-[10px] font-bold text-sky-500 uppercase">Available</p>
+
+              <div className="flex items-center gap-2">
+                {isInstalled && (
+                  <span className="rounded-full bg-white/10 border border-white/20 px-2.5 py-1 text-[10px] font-bold text-emerald-300 flex items-center gap-1">
+                    <Smartphone className="w-3 h-3" />
+                    <span>Active</span>
+                  </span>
+                )}
+                {isInstallable && (
+                  <button
+                    onClick={handleInstallPwa}
+                    className="flex items-center gap-1 rounded-full bg-white/15 border border-white/20 px-3 py-1.5 text-xs font-bold text-white hover:bg-white/25 transition backdrop-blur-sm"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Install</span>
+                  </button>
+                )}
+                <button
+                  onClick={handleEmployeeLogout}
+                  className="flex items-center gap-1 rounded-full bg-white/10 border border-white/20 px-3 py-1.5 text-xs font-bold text-white hover:bg-rose-500 hover:border-rose-500 transition backdrop-blur-sm"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>Exit</span>
+                </button>
               </div>
             </div>
 
-            {/* Attendance QR Pass Card */}
-            <div className="mb-6 rounded-[2rem] bg-white p-6 shadow-xl shadow-slate-200/50 flex flex-col items-center">
-              <div className="w-full flex justify-between items-center mb-4 border-b border-slate-100 pb-3">
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Identity Pass</p>
-                  <h3 className="text-lg font-bold text-slate-900">Attendance QR Code</h3>
+            {/* Employee Profile Header Card */}
+            <div className="mb-6 flex items-center gap-4 rounded-3xl bg-white border border-slate-200/80 p-5 shadow-xl shadow-slate-200/50 backdrop-blur-xl">
+              {employee.profileImageUrl ? (
+                <img
+                  src={employee.profileImageUrl}
+                  alt=""
+                  className="h-16 w-16 rounded-2xl object-cover border-2 border-emerald-500/40 shadow-md"
+                />
+              ) : (
+                <div className="flex h-16 w-16 items-center justify-center rounded-2xl border-2 border-emerald-500/40 bg-gradient-to-br from-slate-800 to-slate-900 text-2xl font-black text-emerald-400 shadow-md">
+                  {employee.name.charAt(0)}
                 </div>
-                <div className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse"></div>
+              )}
+              <div className="flex-1 min-w-0">
+                <h1 className="text-xl font-black text-slate-900 truncate">{employee.name}</h1>
+                <p className="text-xs font-bold text-emerald-600 uppercase tracking-wider">{employee.role}</p>
+                <p className="text-[11px] font-mono text-slate-400 mt-0.5">{employee.employeeId}</p>
               </div>
-              
-              <div className="flex flex-col items-center gap-4 py-2 w-full">
-                {qrCodeUrl ? (
-                  <div className="p-4 bg-slate-50 border border-slate-100 rounded-3xl shadow-inner flex flex-col items-center">
-                    <img src={qrCodeUrl} alt="Scan QR Code" className="w-48 h-48 object-contain rounded-2xl" />
-                    <div className="text-center mt-3">
-                      <p className="text-xs font-mono font-black text-slate-800 tracking-widest">{employee.employeeId}</p>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-1">Scan at Kiosk to Check In</p>
+              {attendanceCount > 0 ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 border border-emerald-200 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-800">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                  Present
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 border border-amber-200 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-amber-800">
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
+                  Not In
+                </span>
+              )}
+            </div>
+
+            {/* TAB 1: HOME OVERVIEW */}
+            {activeTab === 'home' && (
+              <div className="space-y-5 animate-rise">
+                {/* Quick Location Attendance Action Banner */}
+                <div className="rounded-3xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white p-5 shadow-xl shadow-emerald-500/20 flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-emerald-100 flex items-center gap-1">
+                      <Sparkles className="w-3 h-3 text-emerald-200" />
+                      Daily Check-In
+                    </p>
+                    <h3 className="text-base font-black text-white mt-0.5">
+                      {attendanceCount > 0 ? 'Checked In for Today' : 'Location & Face Check-In'}
+                    </h3>
+                    <p className="text-xs text-emerald-50/90 mt-1 max-w-[220px]">
+                      {attendanceCount > 0
+                        ? 'Your presence has been confirmed by GPS & selfie.'
+                        : 'Verify office coordinates & scan your selfie to punch in.'}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setActiveTab('attendance')}
+                    className="shrink-0 flex items-center gap-1.5 rounded-2xl bg-white hover:bg-slate-100 px-4 py-2.5 text-xs font-black text-emerald-800 transition shadow-md active:scale-95"
+                  >
+                    <span>{attendanceCount > 0 ? 'Status' : 'Punch In'}</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {/* Quick Metrics */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="rounded-3xl bg-white border border-slate-200/80 p-5 text-center shadow-lg shadow-slate-200/40">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Work Days</p>
+                    <p className="text-3xl font-black text-slate-900">{attendanceHistory.length || 0}</p>
+                    <p className="mt-1 text-[10px] font-bold text-emerald-600 uppercase flex items-center justify-center gap-1">
+                      <UserCheck className="w-3 h-3" />
+                      Logged
+                    </p>
+                  </div>
+                  <div className="rounded-3xl bg-white border border-slate-200/80 p-5 text-center shadow-lg shadow-slate-200/40">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Assigned Tasks</p>
+                    <p className="text-3xl font-black text-slate-900">{tasks.length}</p>
+                    <p className="mt-1 text-[10px] font-bold text-sky-600 uppercase flex items-center justify-center gap-1">
+                      <CheckSquare className="w-3 h-3" />
+                      Active
+                    </p>
+                  </div>
+                </div>
+
+                {/* Digital Identity QR Pass Card */}
+                <div className="rounded-3xl bg-white border border-slate-200/80 p-6 text-center shadow-xl shadow-slate-200/40">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4 text-left">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Digital ID Pass</p>
+                      <h3 className="text-base font-bold text-slate-900">Office Kiosk QR Badge</h3>
                     </div>
+                    <div className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse"></div>
                   </div>
-                ) : (
-                  <div className="w-48 h-48 bg-slate-100 animate-pulse rounded-3xl"></div>
-                )}
-              </div>
-            </div>
 
-            {/* Check In Status Card */}
-            <div className="mb-6 rounded-[2rem] bg-white p-6 shadow-xl shadow-slate-200/50">
-              <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-4">
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Daily Status</p>
-                  <h3 className="text-lg font-bold text-slate-900">Check-in Status</h3>
-                </div>
-                {attendanceCount > 0 ? (
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                  </div>
-                ) : (
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-rose-100 text-rose-600">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
-                  </div>
-                )}
-              </div>
-              <div className="text-sm font-medium text-slate-600 leading-relaxed">
-                {attendanceCount > 0 ? (
-                  <p>You have successfully checked in today. Keep up the great work!</p>
-                ) : (
-                  <p>You haven't checked in yet today. Use the office Kiosk to mark your attendance securely.</p>
-                )}
-              </div>
-            </div>
-
-            {/* Profile Info Card */}
-            <div className="mb-6 rounded-[2rem] bg-white p-6 shadow-xl shadow-slate-200/50">
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 mb-1">About You</p>
-              <h3 className="text-lg font-bold text-slate-900 mb-4">Profile Details</h3>
-              
-              <div className="space-y-4">
-                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Employee ID</span>
-                  <span className="text-sm font-bold font-mono text-slate-900 bg-slate-100 px-2 py-1 rounded-md">{employee.employeeId}</span>
-                </div>
-                {employee.email && (
-                  <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                    <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Email</span>
-                    <span className="text-sm font-bold text-slate-900 truncate max-w-[200px]">{employee.email}</span>
-                  </div>
-                )}
-                {employee.phone && (
-                  <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                    <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Phone</span>
-                    <span className="text-sm font-bold text-slate-900">{employee.phone}</span>
-                  </div>
-                )}
-                {employee.salary && (
-                  <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                    <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Base Salary</span>
-                    <span className="text-sm font-bold text-emerald-600">₹{employee.salary.toLocaleString('en-IN')}</span>
-                  </div>
-                )}
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Join Date</span>
-                  <span className="text-sm font-bold text-slate-900">{employee.joinDate || 'N/A'}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Legacy PDF Tasks Card */}
-            {tasks.length > 0 && (
-              <div className="rounded-[2rem] bg-white p-6 shadow-xl shadow-slate-200/50">
-                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 mb-1">Company Docs</p>
-                <h3 className="text-lg font-bold text-slate-900 mb-4">Role Attachments</h3>
-                
-                <div className="space-y-3">
-                  {tasks.map((task) => (
-                    <div key={task.id} className="flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-50 p-4 hover:bg-slate-100 transition-colors">
-                      <div>
-                        <p className="font-bold text-slate-900">{task.title}</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-1">{task.role}</p>
+                  <div className="flex flex-col items-center">
+                    {qrCodeUrl ? (
+                      <div className="p-3 bg-slate-50 border border-slate-100 rounded-2xl shadow-inner inline-block">
+                        <img src={qrCodeUrl} alt="QR Code" className="w-44 h-44 object-contain" />
                       </div>
-                      {task.pdfUrl && (
-                        <a href={task.pdfUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white hover:bg-slate-800 transition-all">
-                          View Doc
-                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
-                        </a>
-                      )}
-                    </div>
-                  ))}
+                    ) : (
+                      <div className="w-44 h-44 bg-slate-100 rounded-2xl animate-pulse"></div>
+                    )}
+                    <p className="text-xs font-mono font-bold text-slate-800 tracking-wider mt-3">
+                      {employee.employeeId}
+                    </p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Scan at office tablet kiosk</p>
+                  </div>
                 </div>
+
+                {/* Profile Info Card */}
+                <div className="rounded-3xl bg-white border border-slate-200/80 p-6 shadow-xl shadow-slate-200/40 space-y-3.5">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Personal Details</p>
+                  <div className="space-y-3 text-xs">
+                    <div className="flex items-center justify-between pb-2.5 border-b border-slate-100">
+                      <span className="font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <Mail className="w-3.5 h-3.5 text-slate-400" />
+                        Email
+                      </span>
+                      <span className="font-semibold text-slate-800">{employee.email || 'N/A'}</span>
+                    </div>
+                    <div className="flex items-center justify-between pb-2.5 border-b border-slate-100">
+                      <span className="font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <Phone className="w-3.5 h-3.5 text-slate-400" />
+                        Phone
+                      </span>
+                      <span className="font-semibold text-slate-800">{employee.phone || 'N/A'}</span>
+                    </div>
+                    <div className="flex items-center justify-between pb-2.5 border-b border-slate-100">
+                      <span className="font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                        Join Date
+                      </span>
+                      <span className="font-semibold text-slate-800">{employee.joinDate || 'N/A'}</span>
+                    </div>
+                    {employee.salary && (
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                          <IndianRupee className="w-3.5 h-3.5 text-slate-400" />
+                          Base Salary
+                        </span>
+                        <span className="font-bold text-emerald-600 font-mono">₹{employee.salary.toLocaleString('en-IN')}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Role Attachments / Company Docs */}
+                {tasks.length > 0 && (
+                  <div className="rounded-3xl bg-white border border-slate-200/80 p-6 shadow-xl shadow-slate-200/40 space-y-3">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Company Documents</p>
+                    <div className="space-y-2.5">
+                      {tasks.map((task) => (
+                        <div
+                          key={task.id}
+                          className="flex items-center justify-between rounded-2xl bg-slate-50 border border-slate-200/80 p-3.5"
+                        >
+                          <div>
+                            <p className="text-xs font-bold text-slate-900">{task.title}</p>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase mt-0.5">{task.role}</p>
+                          </div>
+                          {task.pdfUrl && (
+                            <a
+                              href={task.pdfUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="flex items-center gap-1 rounded-xl bg-slate-900 px-3 py-1.5 text-xs font-bold text-white hover:bg-slate-800 transition"
+                            >
+                              <FileText className="w-3 h-3" />
+                              <span>View PDF</span>
+                            </a>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
-          </>
-        ) : (
-          <EmployeeTaskModule employee={employee} />
-        )}
-        
-      </div>
 
-      {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 w-full max-w-lg left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur-xl border-t border-slate-100 pb-safe z-50 rounded-t-[2rem] shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)]">
-        <div className="flex justify-around items-center p-4">
-          <button 
+            {/* TAB 3: TASKS MODULE */}
+            {activeTab === 'tasks' && (
+              <div className="animate-rise">
+                <EmployeeTaskModule employee={employee} />
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* ========================================================= */}
+      {/* BOTTOM FLOATING NAVIGATION BAR WITH DAY MODE & COLOR PILL  */}
+      {/* ========================================================= */}
+      <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-lg bg-white/95 border-t border-slate-200/90 backdrop-blur-xl pb-safe z-50 rounded-t-[2rem] shadow-2xl shadow-slate-300/40">
+        <div className="flex justify-around items-center p-2">
+          {/* Home Tab */}
+          <button
             onClick={() => setActiveTab('home')}
-            className={`flex flex-col items-center gap-1 transition-colors ${activeTab === 'home' ? 'text-emerald-500' : 'text-slate-400 hover:text-slate-600'}`}
+            className={`flex flex-col items-center gap-1 transition-all py-1.5 px-4 rounded-2xl ${
+              activeTab === 'home'
+                ? 'text-emerald-700 font-bold bg-emerald-50 border border-emerald-200/70'
+                : 'text-slate-400 hover:text-slate-600'
+            }`}
           >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
+            <HomeIcon className="w-5 h-5" />
             <span className="text-[10px] font-bold tracking-wider uppercase">Home</span>
           </button>
-          
-          <button 
+
+          {/* Attendance Tab with Live Color-Coded Proximity Badge & Label */}
+          <button
+            onClick={() => {
+              setActiveTab('attendance')
+              if (!userCoords && !isCheckingGps) {
+                checkCurrentLocation()
+              }
+            }}
+            className={`flex flex-col items-center gap-0.5 transition-all py-1 px-3.5 rounded-2xl relative ${
+              activeTab === 'attendance'
+                ? isInsideOffice === true
+                  ? 'text-emerald-700 font-bold bg-emerald-50 border border-emerald-300 shadow-sm'
+                  : 'text-slate-800 font-bold bg-slate-100 border border-slate-300 shadow-sm'
+                : isInsideOffice === true
+                ? 'text-emerald-600 hover:bg-emerald-50/60'
+                : 'text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            <div className="relative">
+              <ShieldCheck
+                className={`w-5 h-5 ${
+                  isInsideOffice === true
+                    ? 'text-emerald-600'
+                    : isInsideOffice === false
+                    ? 'text-amber-500'
+                    : 'text-slate-500'
+                }`}
+              />
+              
+              {/* Dynamic Dot Badge showing Live Proximity Color */}
+              {attendanceCount > 0 ? (
+                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-500 rounded-full ring-2 ring-white"></span>
+              ) : isCheckingGps ? (
+                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-sky-400 rounded-full ring-2 ring-white animate-ping"></span>
+              ) : isInsideOffice === true ? (
+                <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500 ring-2 ring-white"></span>
+                </span>
+              ) : (
+                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-amber-400 rounded-full ring-2 ring-white animate-pulse"></span>
+              )}
+            </div>
+
+            {/* Attendance Text Label */}
+            <span className="text-[10px] font-black tracking-wider uppercase">
+              Attendance
+            </span>
+
+            {/* Dynamic Proximity Label showing live Color status */}
+            {isCheckingGps ? (
+              <span className="text-[8px] font-bold text-sky-600 uppercase tracking-tight">Locating...</span>
+            ) : isInsideOffice === true ? (
+              <span className="text-[8px] font-black text-emerald-600 uppercase tracking-tight flex items-center gap-0.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                In Range {distanceToOffice !== null ? `(${distanceToOffice}m)` : ''}
+              </span>
+            ) : isInsideOffice === false ? (
+              <span className="text-[8px] font-bold text-amber-600 uppercase tracking-tight">
+                Away {distanceToOffice !== null ? `(${distanceToOffice}m)` : ''}
+              </span>
+            ) : (
+              <span className="text-[8px] font-bold text-slate-400 uppercase tracking-tight">GPS Ready</span>
+            )}
+          </button>
+
+          {/* Tasks Tab */}
+          <button
             onClick={() => {
               setActiveTab('tasks')
               setHasNewTasks(false)
             }}
-            className={`flex flex-col items-center gap-1 relative transition-colors ${activeTab === 'tasks' ? 'text-emerald-500' : 'text-slate-400 hover:text-slate-600'}`}
+            className={`flex flex-col items-center gap-1 transition-all py-1.5 px-4 rounded-2xl relative ${
+              activeTab === 'tasks'
+                ? 'text-emerald-700 font-bold bg-emerald-50 border border-emerald-200/70'
+                : 'text-slate-400 hover:text-slate-600'
+            }`}
           >
             <div className="relative">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
+              <CheckSquare className="w-5 h-5" />
               {hasNewTasks && (
-                <span className="absolute -top-1 -right-1 w-3 h-3 bg-rose-500 rounded-full border-2 border-white animate-pulse"></span>
+                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-rose-500 rounded-full ring-2 ring-white animate-pulse"></span>
               )}
             </div>
-            <span className="text-[10px] font-bold tracking-wider uppercase">Task</span>
+            <span className="text-[10px] font-bold tracking-wider uppercase">Tasks</span>
           </button>
         </div>
       </nav>

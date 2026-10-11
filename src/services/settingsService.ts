@@ -5,6 +5,50 @@ export interface KioskSettings {
   attendanceMethod: 'camera' | 'pin'
 }
 
+export interface AttendanceTimingSettings {
+  onTimeCutoff: string // e.g. "09:30"
+  halfDayCutoff: string // e.g. "13:00"
+  endOfDayCutoff: string // e.g. "19:00"
+  photoRetentionDays: number // e.g. 30
+}
+
+export const DEFAULT_TIMING_SETTINGS: AttendanceTimingSettings = {
+  onTimeCutoff: '09:30',
+  halfDayCutoff: '13:00',
+  endOfDayCutoff: '19:00',
+  photoRetentionDays: 30,
+}
+
+export const getAttendanceTimingSettings = async (): Promise<AttendanceTimingSettings> => {
+  try {
+    const docRef = doc(db, 'settings', 'attendance_timing')
+    const docSnap = await getDoc(docRef)
+    if (docSnap.exists()) {
+      return { ...DEFAULT_TIMING_SETTINGS, ...docSnap.data() } as AttendanceTimingSettings
+    }
+  } catch (err) {
+    console.error('Error getting timing settings:', err)
+  }
+  return DEFAULT_TIMING_SETTINGS
+}
+
+export const updateAttendanceTimingSettings = async (
+  settings: Partial<AttendanceTimingSettings>
+): Promise<void> => {
+  const docRef = doc(db, 'settings', 'attendance_timing')
+  await setDoc(docRef, { ...settings, updatedAt: new Date().toISOString() }, { merge: true })
+}
+
+export interface OfficeLocation {
+  officeName: string
+  address: string
+  latitude: number
+  longitude: number
+  radiusMeters: number // e.g., 100 meters
+  updatedAt?: string
+  updatedBy?: string
+}
+
 export const getKioskSettings = async (): Promise<KioskSettings> => {
   try {
     const docRef = doc(db, 'settings', 'kiosk')
@@ -22,3 +66,54 @@ export const updateKioskSettings = async (settings: KioskSettings): Promise<void
   const docRef = doc(db, 'settings', 'kiosk')
   await setDoc(docRef, settings, { merge: true })
 }
+
+export const getOfficeLocation = async (): Promise<OfficeLocation | null> => {
+  try {
+    const docRef = doc(db, 'settings', 'office_location')
+    const docSnap = await getDoc(docRef)
+    if (docSnap.exists()) {
+      return docSnap.data() as OfficeLocation
+    }
+  } catch (err) {
+    console.error('Error getting office location settings:', err)
+  }
+  return null
+}
+
+export const updateOfficeLocation = async (location: OfficeLocation): Promise<void> => {
+  const docRef = doc(db, 'settings', 'office_location')
+  await setDoc(
+    docRef,
+    {
+      ...location,
+      updatedAt: new Date().toISOString(),
+    },
+    { merge: true }
+  )
+}
+
+/**
+ * Calculates distance between two GPS coordinates in meters using the Haversine formula.
+ */
+export const calculateDistanceMeters = (
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number => {
+  const R = 6371000 // Earth's radius in meters
+  const toRad = (deg: number) => (deg * Math.PI) / 180
+
+  const dLat = toRad(lat2 - lat1)
+  const dLon = toRad(lon2 - lon1)
+  const radLat1 = toRad(lat1)
+  const radLat2 = toRad(lat2)
+
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.sin(dLon / 2) * Math.sin(dLon / 2) * Math.cos(radLat1) * Math.cos(radLat2)
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+
+  return R * c
+}
+

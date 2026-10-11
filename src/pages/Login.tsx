@@ -1,8 +1,11 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Button from '../components/Button'
 import Card from '../components/Card'
 import { signInAdmin } from '../services/authService'
+import { useAuth } from '../context/AuthContext'
+import { doc, getDoc } from 'firebase/firestore'
+import { db } from '../services/firebase'
 
 export default function Login() {
   const [email, setEmail] = useState('')
@@ -10,6 +13,13 @@ export default function Login() {
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const navigate = useNavigate()
+  const { isAdmin, isLoading: authLoading } = useAuth()
+
+  useEffect(() => {
+    if (!authLoading && isAdmin) {
+      navigate('/', { replace: true })
+    }
+  }, [isAdmin, authLoading, navigate])
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -17,11 +27,16 @@ export default function Login() {
     setIsLoading(true)
 
     try {
-      await signInAdmin(email, password)
-      navigate('/')
+      const userCred = await signInAdmin(email, password)
+      const isOwner = userCred.user.email === 'abhi31mahi@gmail.com'
+      const adminDoc = await getDoc(doc(db, 'admins', userCred.user.uid))
+      
+      if (!adminDoc.exists() && !isOwner) {
+        throw new Error('Access denied. This account does not have administrator privileges.')
+      }
+      navigate('/', { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to sign in.')
-    } finally {
       setIsLoading(false)
     }
   }
